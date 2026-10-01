@@ -7,7 +7,7 @@ import type { Ir, McpServer, Scope } from "../ir/schema.ts";
 import { withHeader } from "../sync/hash.ts";
 import { importClaude } from "./claude/import.ts";
 import { claudePaths } from "./claude/paths.ts";
-import { type ClaudeRules, toClaudeRules } from "./claude/permissions.ts";
+import { type ClaudeRules, toClaudePath, toClaudeRules } from "./claude/permissions.ts";
 import type { Adapter, Artifact, EmitContext } from "./types.ts";
 
 /** Paths inside `permissions` that tenore owns; everything else in settings is left alone. */
@@ -20,6 +20,24 @@ export const OWNED_PERMISSION_KEYS = [
 
 export const claude: Adapter = {
   id: "claude",
+
+  expresses: {
+    capability(cap, list, scope) {
+      // network: the level picks the list on the way back; "full" emits nothing.
+      if ("network" in cap) {
+        if (cap.network === "full") return undefined;
+        return { list: cap.network === "none" ? "deny" : "ask", cap };
+      }
+      if (("fs.read" in cap || "fs.write" in cap) && scope === "global") {
+        // Anchored globs have no base in user settings (dropped, or denied at any depth).
+        const glob = "fs.read" in cap ? cap["fs.read"] : cap["fs.write"];
+        if (toClaudePath(glob, scope) === undefined) return undefined;
+      }
+      if ("shell" in cap) return { list, cap: { shell: cap.shell.replace(/:\*$/, " *") } };
+      return { list, cap };
+    },
+    server: (_name, _server, scope) => scope === "repo",
+  },
 
   async detect(root) {
     for (const p of ["CLAUDE.md", ".claude", ".mcp.json", "CLAUDE.local.md"]) {

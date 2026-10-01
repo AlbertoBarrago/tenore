@@ -5,4 +5,5 @@ coverage/
 .DS_Store
 .agents/local/
 CLAUDE.local.md
+AGENTS.override.md
 .claude/settings.local.json

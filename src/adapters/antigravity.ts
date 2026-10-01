@@ -3,6 +3,7 @@ import type { Adapter } from "./types.ts";
 /** Antigravity adapter: stub, out of scope for phase 1. Emits nothing and says so. */
 export const antigravity: Adapter = {
   id: "antigravity",
+  expresses: { capability: () => undefined, server: () => false },
   async detect() {
     return false;
   },

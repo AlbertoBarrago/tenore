@@ -31,7 +31,9 @@ describe("cli", () => {
     const init = await run(["init"], root, home);
     expect(init.code).toBe(0);
     expect(init.stdout).toContain("write          .agents/AGENTS.md");
-    expect(init.stdout).toContain("added to .gitignore: .agents/local/, CLAUDE.local.md");
+    expect(init.stdout).toContain(
+      "added to .gitignore: .agents/local/, CLAUDE.local.md, AGENTS.override.md",
+    );
     expect(await read(root, ".agents/policy.md")).toContain("yaml-language-server: $schema=");
 
     expect((await run(["check"], root, home)).code).toBe(1);

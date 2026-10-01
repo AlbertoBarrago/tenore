@@ -1,6 +1,6 @@
 import type { Warning } from "../ir/diagnostics.ts";
 import type { Layer } from "../ir/parse.ts";
-import type { AdapterId, Ir, Scope } from "../ir/schema.ts";
+import type { AdapterId, Capability, Ir, McpServer, PermissionLevel, Scope } from "../ir/schema.ts";
 
 /**
  * How an artifact is written.
@@ -51,8 +51,25 @@ export interface ImportContext {
  */
 export type ImportResult = Pick<Layer, "instructions" | "memory" | "policy" | "warnings">;
 
+/**
+ * What survives emit -> import for this adapter. `init --import` uses it to
+ * keep the parts of an existing `.agents/` layer the target cannot express,
+ * instead of silently dropping them (e.g. fs rules on Codex).
+ */
+export interface Expressiveness {
+  /** The capability as it comes back after a round-trip, or `undefined` if it is not emitted. */
+  capability(
+    cap: Capability,
+    list: PermissionLevel,
+    scope: Scope,
+  ): { list: PermissionLevel; cap: Capability } | undefined;
+  /** Whether this MCP server is emitted in this scope. */
+  server(name: string, server: McpServer, scope: Scope): boolean;
+}
+
 export interface Adapter {
   id: AdapterId;
+  expresses: Expressiveness;
   detect(root: string): Promise<boolean>;
   emit(ir: Ir, ctx: EmitContext): Promise<Artifact[]>;
   import(root: string, ctx: ImportContext): Promise<ImportResult>;

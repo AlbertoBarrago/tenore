@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Adapter, ImportResult } from "./adapters/types.ts";
-import { isPlainObject } from "./ir/canonical.ts";
+import { canonicalKey, dedupe, isPlainObject } from "./ir/canonical.ts";
 import {
   INSTRUCTIONS_FILE,
   type Layer,
@@ -10,7 +10,7 @@ import {
   POLICY_FILE,
   parseLayers,
 } from "./ir/parse.ts";
-import type { Policy, Scope } from "./ir/schema.ts";
+import type { Capability, McpServer, PermissionLevel, Policy, Scope } from "./ir/schema.ts";
 import { layerFiles, renderPolicy } from "./ir/serialize.ts";
 import {
   entryStrategy,
@@ -40,7 +40,7 @@ Shared instructions for every coding agent working in this repository.
 Edit this file, then run \`tenore sync\`.
 `;
 
-const GITIGNORE_LINES = [".agents/local/", "CLAUDE.local.md"];
+const GITIGNORE_LINES = [".agents/local/", "CLAUDE.local.md", "AGENTS.override.md"];
 
 /** Creates an empty `.agents/` layout. Existing files are never overwritten. */
 export async function scaffold(
@@ -115,7 +115,7 @@ export async function importInto(
     const layer = existing.find((l) => l.scope === scope);
     const files = layerFiles(dirs[scope], {
       ...imported,
-      policy: mergePolicy(layer, imported.policy, scope),
+      policy: mergePolicy(adapter, layer, imported.policy, scope),
     });
     const changed: [string, string][] = [];
     for (const [path, content] of Object.entries(files)) {
@@ -138,22 +138,65 @@ export async function importInto(
   return result;
 }
 
+const LEVELS: readonly PermissionLevel[] = ["allow", "ask", "deny"];
+
 /**
- * Keeps what the import cannot see: MCP servers of scopes Claude does not emit
- * them for, and overrides of other adapters. Everything the adapter reads back
- * (permissions, its own overrides, repo MCP) is replaced by the imported value.
+ * The import is authoritative only for what the adapter expresses exactly.
+ * Everything else in the existing layer is kept: capabilities the target drops
+ * or rewrites (fs rules on Codex, a glob broadened to a prefix), MCP servers it
+ * does not emit in this scope, and other adapters' overrides. The rewritten
+ * echo of a kept capability is removed from the import so it is not duplicated.
  */
-function mergePolicy(layer: Layer | undefined, imported: Policy, scope: Scope): Policy {
+export function mergePolicy(
+  adapter: Adapter,
+  layer: Layer | undefined,
+  imported: Policy,
+  scope: Scope,
+): Policy {
   const current = layer?.policy ?? {};
-  const out: Policy = { ...imported };
-  if (scope !== "repo" && current.mcp) out.mcp = current.mcp;
+  const fromImport: Record<PermissionLevel, Capability[]> = {
+    allow: [...(imported.permissions?.allow ?? [])],
+    ask: [...(imported.permissions?.ask ?? [])],
+    deny: [...(imported.permissions?.deny ?? [])],
+  };
+  const kept: Record<PermissionLevel, Capability[]> = { allow: [], ask: [], deny: [] };
+
+  for (const list of LEVELS) {
+    for (const cap of current.permissions?.[list] ?? []) {
+      const echo = adapter.expresses.capability(cap, list, scope);
+      if (echo && echo.list === list && canonicalKey(echo.cap) === canonicalKey(cap)) continue;
+      kept[list].push(cap);
+      if (echo) {
+        const target = fromImport[echo.list];
+        const i = target.findIndex((c) => canonicalKey(c) === canonicalKey(echo.cap));
+        if (i >= 0) target.splice(i, 1);
+      }
+    }
+  }
+
+  const out: Policy = {};
+  const permissions: NonNullable<Policy["permissions"]> = {};
+  const def = imported.permissions?.default ?? current.permissions?.default;
+  if (def !== undefined) permissions.default = def;
+  for (const list of LEVELS) {
+    const caps = dedupe([...kept[list], ...fromImport[list]]);
+    if (caps.length > 0) permissions[list] = caps;
+  }
+  if (Object.keys(permissions).length > 0) out.permissions = permissions;
+
+  const mcp: Record<string, McpServer> = {};
+  for (const [name, server] of Object.entries(current.mcp ?? {})) {
+    if (!adapter.expresses.server(name, server, scope)) mcp[name] = server;
+  }
+  Object.assign(mcp, imported.mcp);
+  if (Object.keys(mcp).length > 0) out.mcp = mcp;
+
   const others = Object.fromEntries(
-    Object.entries(current.overrides ?? {}).filter(([id]) => id !== "claude"),
+    Object.entries(current.overrides ?? {}).filter(([id]) => id !== adapter.id),
   );
-  const claude = imported.overrides?.claude;
-  const overrides = { ...others, ...(claude ? { claude } : {}) };
+  const own = imported.overrides?.[adapter.id];
+  const overrides = { ...others, ...(own ? { [adapter.id]: own } : {}) };
   if (Object.keys(overrides).length > 0) out.overrides = overrides;
-  else delete out.overrides;
   return out;
 }
 

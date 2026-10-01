@@ -3,6 +3,7 @@ import type { Adapter } from "./types.ts";
 /** Gemini CLI adapter: stub, out of scope for phase 1. Emits nothing and says so. */
 export const gemini: Adapter = {
   id: "gemini",
+  expresses: { capability: () => undefined, server: () => false },
   async detect() {
     return false;
   },
