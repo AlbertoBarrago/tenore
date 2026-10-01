@@ -25,9 +25,14 @@ export function layerFiles(dir: string, layer: ImportResult): Record<string, str
   return files;
 }
 
+/** Lets YAML-aware editors validate the frontmatter against the published schema. */
+export const SCHEMA_COMMENT =
+  "# yaml-language-server: $schema=https://raw.githubusercontent.com/AlbertoBarrago/tenore/main/schema/policy.schema.json";
+
 export function renderPolicy(policy: Policy): string {
   // gray-matter appends the (empty) body after a blank line; keep one trailing newline.
-  return `${matter.stringify("", policy).trimEnd()}\n`;
+  const rendered = matter.stringify("", policy).trimEnd();
+  return `---\n${SCHEMA_COMMENT}\n${rendered.slice("---\n".length)}\n`;
 }
 
 /**

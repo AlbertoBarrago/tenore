@@ -1,14 +1,220 @@
 #!/usr/bin/env node
-import { Command } from "commander";
+import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { Command, CommanderError, Option } from "commander";
+import { adapters, IMPLEMENTED } from "./adapters/index.ts";
+import type { Adapter } from "./adapters/types.ts";
+import { type InitResult, importInto, scaffold } from "./init.ts";
+import { formatIssue, SourceError, type Warning } from "./ir/diagnostics.ts";
+import { parseLayers } from "./ir/parse.ts";
+import { ADAPTER_IDS, type AdapterId, type Scope } from "./ir/schema.ts";
+import { display, renderDiff } from "./sync/diff.ts";
+import { applyPlan, BLOCKING, PENDING, type Plan, planSync } from "./sync/plan.ts";
 
-const program = new Command();
+export interface Io {
+  stdout: (text: string) => void;
+  stderr: (text: string) => void;
+  cwd: string;
+  home: string;
+}
 
-program
-  .name("tenore")
-  .description("Compile a single .agents/ source of truth into each coding agent's native config")
-  .version("0.1.0");
+interface ScopeOptions {
+  root?: string;
+  home?: string;
+  global?: boolean;
+  target?: AdapterId[];
+}
 
-program.parseAsync(process.argv).catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+/**
+ * Runs the CLI and returns the exit code instead of exiting, so tests can
+ * drive it in-process. Exit codes: 0 ok, 1 drift/conflict/invalid sources
+ * (or out of sync for `check`).
+ */
+export async function main(argv: readonly string[], io: Io): Promise<number> {
+  let code = 0;
+  const program = new Command()
+    .name("tenore")
+    .description("Compile a single .agents/ source of truth into each coding agent's native config")
+    .version("0.1.0")
+    .exitOverride()
+    .configureOutput({ writeOut: io.stdout, writeErr: io.stderr });
+
+  const withScopeOptions = (cmd: Command) =>
+    cmd
+      .option("--root <dir>", "repository root", io.cwd)
+      .option("--global", "also include the global scope (~/.agents -> ~/.claude)")
+      .addOption(
+        new Option("--target <ids...>", "adapters to run")
+          .choices([...ADAPTER_IDS])
+          .default([...IMPLEMENTED]),
+      )
+      .addOption(new Option("--home <dir>", "home directory").default(io.home).hideHelp());
+
+  withScopeOptions(
+    program.command("sync").description("write generated files; never overwrites hand edits"),
+  ).action(async (opts: ScopeOptions) => {
+    code = await runSync(opts, io, "sync");
+  });
+  withScopeOptions(
+    program.command("diff").description("show what sync would change, as a unified diff"),
+  ).action(async (opts: ScopeOptions) => {
+    code = await runSync(opts, io, "diff");
+  });
+  withScopeOptions(
+    program
+      .command("check")
+      .description("exit 1 on drift, conflicts, schema errors or pending changes"),
+  ).action(async (opts: ScopeOptions) => {
+    code = await runSync(opts, io, "check");
+  });
+
+  program
+    .command("init")
+    .description("scaffold .agents/, or import an agent's existing config into it")
+    .option("--root <dir>", "repository root", io.cwd)
+    .option("--global", "work on ~/.agents instead of the repo")
+    .addOption(
+      new Option("--import <id>", "import native config of this adapter").choices([...IMPLEMENTED]),
+    )
+    .option("--force", "overwrite existing .agents/ files with the imported content")
+    .addOption(new Option("--home <dir>", "home directory").default(io.home).hideHelp())
+    .action(async (opts: ScopeOptions & { import?: AdapterId; force?: boolean }) => {
+      code = await runInit(opts, io);
+    });
+
+  try {
+    await program.parseAsync([...argv], { from: "user" });
+  } catch (error) {
+    if (error instanceof CommanderError) return error.exitCode;
+    if (error instanceof SourceError) {
+      for (const issue of error.issues) io.stderr(`error: ${formatIssue(issue)}\n`);
+      return 1;
+    }
+    throw error;
+  }
+  return code;
+}
+
+function scopesOf(opts: ScopeOptions): Scope[] {
+  return opts.global ? ["global", "repo", "local"] : ["repo", "local"];
+}
+
+async function runSync(
+  opts: ScopeOptions,
+  io: Io,
+  mode: "sync" | "diff" | "check",
+): Promise<number> {
+  const root = resolve(opts.root ?? io.cwd);
+  const home = resolve(opts.home ?? io.home);
+  const selected: Adapter[] = (opts.target ?? [...IMPLEMENTED]).map((id) => adapters[id]);
+  const layers = await parseLayers(root, home);
+  const plan = await planSync(selected, layers, scopesOf(opts), root, home);
+
+  printWarnings(plan.warnings, io);
+  if (mode === "diff") {
+    io.stdout(renderDiff(plan, root));
+  } else {
+    printActions(plan, root, io, mode);
+  }
+  if (mode === "sync") await applyPlan(plan);
+
+  const blocking = plan.actions.filter((a) => BLOCKING.includes(a.kind));
+  if (blocking.length > 0) {
+    const flags = blocking.some((a) => a.scope === "global") ? " --global" : "";
+    io.stderr(
+      `\n${blocking.length} file(s) not written. To keep those edits, pull them into .agents/ with:\n` +
+        `  tenore init --import ${blocking[0]?.adapter ?? "claude"}${flags} --force\n` +
+        "or delete the files to let tenore regenerate them.\n",
+    );
+    return 1;
+  }
+  if (mode === "check") {
+    const pending = plan.actions.some((a) => PENDING.includes(a.kind)) || plan.locks.length > 0;
+    if (pending) {
+      io.stderr("\nout of sync: run `tenore sync`\n");
+      return 1;
+    }
+    io.stdout("ok\n");
+  }
+  return 0;
+}
+
+function printActions(plan: Plan, root: string, io: Io, mode: "sync" | "check"): void {
+  for (const action of plan.actions) {
+    if (action.kind === "unchanged") continue;
+    const verb =
+      mode === "check" && PENDING.includes(action.kind) ? `would ${action.kind}` : action.kind;
+    const reason = action.reason ? ` (${action.reason})` : "";
+    const line = `${verb.padEnd(14)} ${display(action.path, root)}${reason}\n`;
+    if (BLOCKING.includes(action.kind)) io.stderr(line);
+    else io.stdout(line);
+  }
+}
+
+function printWarnings(warnings: readonly Warning[], io: Io): void {
+  for (const w of warnings) io.stderr(`warning: [${w.code}] ${w.message}\n`);
+}
+
+async function runInit(
+  opts: ScopeOptions & { import?: AdapterId; force?: boolean },
+  io: Io,
+): Promise<number> {
+  const root = resolve(opts.root ?? io.cwd);
+  const home = resolve(opts.home ?? io.home);
+  let result: InitResult;
+  if (opts.import) {
+    const scopes: Scope[] = opts.global ? ["global"] : ["repo", "local"];
+    result = await importInto(adapters[opts.import], root, home, scopes, opts.force ?? false);
+  } else {
+    result = await scaffold(root, home, opts.global ? "global" : "repo");
+  }
+
+  printWarnings(result.warnings, io);
+  for (const path of result.written) io.stdout(`write          ${display(path, root)}\n`);
+  for (const path of result.adopted)
+    io.stdout(`adopt          ${display(path, root)} (replaced on next sync)\n`);
+  for (const note of result.notes) io.stdout(`${note}\n`);
+  if (result.blocked.length > 0) {
+    for (const path of result.blocked) io.stderr(`exists         ${display(path, root)}\n`);
+    io.stderr(
+      "\nexisting .agents/ files differ from the import; rerun with --force to overwrite them\n",
+    );
+    return 1;
+  }
+  if (result.written.length === 0 && result.adopted.length === 0) io.stdout("nothing to do\n");
+  else io.stdout("\nnext: review .agents/, then run `tenore diff` and `tenore sync`\n");
+  return 0;
+}
+
+/** Entry point when executed as a binary (also through npm's bin symlink). */
+function isEntry(): boolean {
+  const script = process.argv[1];
+  if (!script) return false;
+  try {
+    return realpathSync(script) === fileURLToPath(import.meta.url);
+  } catch {
+    // argv[1] may not be a real path (e.g. `node -e`); then this module was imported, not run.
+    return false;
+  }
+}
+
+if (isEntry()) {
+  main(process.argv.slice(2), {
+    stdout: (t) => process.stdout.write(t),
+    stderr: (t) => process.stderr.write(t),
+    cwd: process.cwd(),
+    home: homedir(),
+  }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error: unknown) => {
+      process.stderr.write(
+        `tenore: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+      );
+      process.exitCode = 2;
+    },
+  );
+}
