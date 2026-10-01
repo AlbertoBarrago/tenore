@@ -6,6 +6,7 @@ import { layerDirs, MEMORY_DIR } from "../ir/parse.ts";
 import type { Ir, McpServer, Scope } from "../ir/schema.ts";
 import { withHeader } from "../sync/hash.ts";
 import { importClaude } from "./claude/import.ts";
+import { claudePaths } from "./claude/paths.ts";
 import { type ClaudeRules, toClaudeRules } from "./claude/permissions.ts";
 import type { Adapter, Artifact, EmitContext } from "./types.ts";
 
@@ -16,26 +17,6 @@ export const OWNED_PERMISSION_KEYS = [
   "permissions.deny",
   "permissions.defaultMode",
 ] as const;
-
-/** Native file locations per scope. */
-export function claudePaths(scope: Scope, root: string, home: string) {
-  if (scope === "global") {
-    const dir = join(home, ".claude");
-    return { memory: join(dir, "CLAUDE.md"), settings: join(dir, "settings.json"), mcp: undefined };
-  }
-  if (scope === "repo") {
-    return {
-      memory: join(root, "CLAUDE.md"),
-      settings: join(root, ".claude", "settings.json"),
-      mcp: join(root, ".mcp.json"),
-    };
-  }
-  return {
-    memory: join(root, "CLAUDE.local.md"),
-    settings: join(root, ".claude", "settings.local.json"),
-    mcp: undefined,
-  };
-}
 
 export const claude: Adapter = {
   id: "claude",
@@ -79,7 +60,10 @@ function compile(ir: Ir, ctx: EmitContext): { artifacts: Artifact[]; warnings: W
     });
   }
 
-  const servers = Object.keys(ir.mcp);
+  const rawServers = isPlainObject(ir.overrides.claude?.mcpServers)
+    ? ir.overrides.claude.mcpServers
+    : {};
+  const servers = [...Object.keys(ir.mcp), ...Object.keys(rawServers)];
   if (servers.length > 0) {
     if (paths.mcp === undefined) {
       // Claude keeps user and local MCP servers in ~/.claude.json, a large
@@ -89,7 +73,11 @@ function compile(ir: Ir, ctx: EmitContext): { artifacts: Artifact[]; warnings: W
         message: `${ctx.scope} MCP servers (${servers.join(", ")}) are not emitted for Claude; declare them in the repo .agents/policy.md`,
       });
     } else {
-      artifacts.push({ path: paths.mcp, content: json(mcpFile(ir.mcp)), strategy: "owned" });
+      artifacts.push({
+        path: paths.mcp,
+        content: json(mcpFile(ir.mcp, rawServers)),
+        strategy: "owned",
+      });
     }
   }
   return { artifacts, warnings };
@@ -204,8 +192,12 @@ export function toClaudeEnv(value: string): string {
   return value.replace(/\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}/g, "${$1}");
 }
 
-function mcpFile(servers: Record<string, McpServer>): object {
-  const mcpServers: Record<string, unknown> = {};
+/**
+ * `raw` holds servers the IR cannot express (remote transports,
+ * `${VAR:-default}`), stored verbatim by import under `overrides.claude.mcpServers`.
+ */
+function mcpFile(servers: Record<string, McpServer>, raw: Record<string, unknown>): object {
+  const mcpServers: Record<string, unknown> = { ...raw };
   for (const [name, s] of Object.entries(servers)) {
     mcpServers[name] = {
       type: "stdio",
@@ -216,7 +208,13 @@ function mcpFile(servers: Record<string, McpServer>): object {
         : {}),
     };
   }
-  return { mcpServers };
+  return {
+    mcpServers: Object.fromEntries(
+      Object.keys(mcpServers)
+        .sort()
+        .map((k) => [k, mcpServers[k]]),
+    ),
+  };
 }
 
 function json(value: unknown): string {

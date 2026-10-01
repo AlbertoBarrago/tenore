@@ -10,7 +10,7 @@ export const gemini: Adapter = {
     return [];
   },
   async import() {
-    return {};
+    return { instructions: [], memory: [], policy: {}, warnings: [] };
   },
   lossy() {
     return [

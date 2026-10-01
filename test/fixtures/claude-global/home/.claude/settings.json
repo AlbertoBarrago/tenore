@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": ["Bash(npm run test:*)", "Read(.env.example)", "WebFetch(domain:code.claude.com)"],
+    "deny": ["Read(.env*)", "Bash(git push --force*)", "mcp__github__delete_repo"],
+    "additionalDirectories": ["~/shared"]
+  },
+  "model": "opus",
+  "hooks": { "SessionStart": [] },
+  "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" },
+  "language": "Italian"
+}

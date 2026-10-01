@@ -64,3 +64,19 @@ Settings files are merged on `permissions.allow`, `permissions.ask`,
 | `memory/<topic>.md` | `@<relative path>` import | TBD | TBD | TBD | One import line per topic, in file-name order. |
 | source path with whitespace | content inlined | TBD | TBD | TBD | `@` imports cannot contain whitespace. Warning `claude-import-inlined`. |
 | `${env:VAR}` | `${VAR}` | TBD | TBD | TBD | Claude expands `${VAR}` in `.mcp.json` at runtime. Never resolved by tenore. |
+
+## Import (Claude to IR)
+
+| Claude | IR | notes |
+|---|---|---|
+| hand-written `CLAUDE.md` / `CLAUDE.local.md` | one instruction block, verbatim | Text is never rewritten or split, so instruction semantics survive by construction. |
+| generated `CLAUDE.md` (with header) | `@` imports resolved to `.agents/` sources | Imports outside the scope's `.agents/` become instruction blocks with warning `claude-import-foreign`; missing targets warn `claude-import-missing`. Inlined content becomes an instruction block of the generated file. |
+| `Bash(x:*)` | `{shell: "x *"}` | Documented as equivalent; re-emitted as `Bash(x *)`. |
+| `WebFetch` + `WebSearch` both in deny / ask | `{network: "none"}` / `{network: "restricted"}` in that list | Exactly what emit produces. Alone, or in allow, they stay raw. |
+| (no web rules) | (no `network`) | `{network: "full"}` emits nothing, so it is indistinguishable from "unset" after a round-trip. Both mean no restriction. |
+| `defaultMode: "default"` / `"dontAsk"` | `default: ask` / `default: deny` | Other modes (`auto`, `plan`, `acceptEdits`, `bypassPermissions`) go to `overrides.claude.permissions.defaultMode`. |
+| `Edit(src/**)`, `Read(./x)`, `Read(/.env)`, `Write(...)`, `WebFetch(domain:...)`, `Skill(...)`, ... | `overrides.claude.permissions.<list>` verbatim | No exact IR form (cwd-relative or root-anchored single segment paths, tool-specific rules). |
+| `.mcp.json` stdio server with `${VAR}` | `mcp.<name>` with `${env:VAR}` | |
+| remote server, `${VAR:-default}`, name with `.` or `__` | `overrides.claude.mcpServers.<name>` verbatim | Re-emitted unchanged into `.mcp.json`. |
+| literal value under a `*TOKEN*`/`*KEY*`/`*SECRET*`/`*PASSWORD*`/`*AUTH*` env key | imported, warning `mcp-literal-secret` | Move it to an env var. |
+| settings keys other than `permissions.{allow,ask,deny,defaultMode}` | not imported | Left untouched on sync. |

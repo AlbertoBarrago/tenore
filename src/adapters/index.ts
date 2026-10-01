@@ -10,4 +10,11 @@ export const adapters: Record<AdapterId, Adapter> = { claude, codex, gemini, ant
 /** Adapters with a working emit; stubs are excluded from default sync targets. */
 export const IMPLEMENTED: readonly AdapterId[] = ["claude"];
 
-export type { Adapter, Artifact, EmitContext, ImportContext, Strategy } from "./types.ts";
+export type {
+  Adapter,
+  Artifact,
+  EmitContext,
+  ImportContext,
+  ImportResult,
+  Strategy,
+} from "./types.ts";

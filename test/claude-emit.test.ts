@@ -155,6 +155,31 @@ describe("claude emit: policy edge cases", () => {
     });
   });
 
+  it("raw MCP servers from overrides are merged into .mcp.json, sorted", async () => {
+    const r = await writeTree({
+      ".agents/policy.md": [
+        "---",
+        "mcp:",
+        "  zz:",
+        "    command: z",
+        "overrides:",
+        "  claude:",
+        "    mcpServers:",
+        "      remote: { type: http, url: 'https://example.com/mcp' }",
+        "---",
+        "",
+      ].join("\n"),
+    });
+    const { artifacts } = await emitScope(r, await writeTree({}), "repo");
+    const mcp = artifacts.find((a) => a.path.endsWith(".mcp.json"));
+    expect(JSON.parse(mcp?.content ?? "")).toEqual({
+      mcpServers: {
+        remote: { type: "http", url: "https://example.com/mcp" },
+        zz: { type: "stdio", command: "z" },
+      },
+    });
+  });
+
   it("local MCP servers are skipped with a warning", async () => {
     const { paths, warnings } = await emitPolicy("---\nmcp:\n  x:\n    command: x\n---\n", "local");
     expect(paths).toEqual([]);

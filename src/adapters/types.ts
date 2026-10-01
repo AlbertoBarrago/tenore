@@ -41,11 +41,18 @@ export interface ImportContext {
   home: string;
 }
 
+/**
+ * What an adapter reads back for one scope. Shaped like a parsed layer rather
+ * than `Partial<Ir>` so that "explicitly set" survives (e.g. a `default` that
+ * equals the fallback) and `init --import` can write it straight to `.agents/`.
+ */
+export type ImportResult = Pick<Layer, "instructions" | "memory" | "policy" | "warnings">;
+
 export interface Adapter {
   id: AdapterId;
   detect(root: string): Promise<boolean>;
   emit(ir: Ir, ctx: EmitContext): Promise<Artifact[]>;
-  import(root: string, ctx: ImportContext): Promise<Partial<Ir>>;
+  import(root: string, ctx: ImportContext): Promise<ImportResult>;
   /** What this target cannot express exactly for `ctx.scope`. */
   lossy(ir: Ir, ctx: EmitContext): Warning[];
 }
