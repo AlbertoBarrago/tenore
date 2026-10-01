@@ -120,12 +120,32 @@ generated from the zod schema in [`src/ir/schema.ts`](src/ir/schema.ts). Only
 | `tenore init --import <claude\|codex\|antigravity> [--force]` | Pull an agent's existing config into `.agents/` | 1 if `.agents/` files would change without `--force` |
 | `tenore sync` | Write generated files | 1 on drift or conflict |
 | `tenore diff` | Dry-run `sync` as a unified diff | 0 |
+| `tenore mcp [--global]` | Serve `.agents/` memory over MCP stdio: `memory_list`, `memory_read`, `memory_search`, `memory_write` | runs until stdin closes |
 | `tenore check` | For CI: verify sources and generated files | 1 on schema errors, drift, conflict, or pending changes |
 
 Common flags: `--root <dir>` (default: cwd), `--global` (include `~/.agents`),
 `--target <ids...>` (default: `targets` from policy.md, else every implemented adapter),
 `--prune` (remove untouched files of adapters that are no longer targets; without it they
 are reported as `orphan` and kept).
+
+## Memory MCP server
+
+`tenore mcp` lets any agent read and update the shared memory in `.agents/memory/` (and
+`.agents/local/memory/`; `~/.agents/memory/` with `--global`). Register it once in
+`.agents/policy.md` and `tenore sync` wires it into every target:
+
+```yaml
+mcp:
+  tenore-memory:
+    command: npx
+    args: ["-y", "tenore", "mcp"]
+```
+
+Writes are confined to the memory directories: topics are plain file names (no `/`, no `..`,
+no dotfiles), bodies are capped at 64 KB, files are written atomically. After `memory_write`
+creates a new topic, run `tenore sync` so each agent's generated files include it. The server
+has no dependencies (minimal stdio JSON-RPC) and was checked with the official MCP Inspector
+and Claude Code.
 
 ## Safety
 
@@ -164,7 +184,7 @@ Every non-obvious mapping decision is a row in [docs/mapping.md](docs/mapping.md
 - [ ] ~~Gemini CLI adapter~~ dropped: Gemini CLI was replaced by Antigravity CLI
 - [x] `tenore check` in CI (GitHub Action)
 - [x] `targets` in policy.md, `--prune` for orphaned files
-- [ ] Memory MCP server (`tenore mcp`)
+- [x] Memory MCP server (`tenore mcp`)
 - [ ] npm publish
 
 ## Development

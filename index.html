@@ -349,6 +349,7 @@ enabled = false</pre>
             <tr><td><code>tenore init [--import claude|codex|antigravity]</code></td><td>Scaffold <code>.agents/</code>, or pull an agent's existing config into it</td></tr>
             <tr><td><code>tenore sync [--prune]</code></td><td>Compile <code>.agents/</code> into every target's native files; <code>--prune</code> removes files of dropped targets</td></tr>
             <tr><td><code>tenore diff</code></td><td>Dry-run sync, unified diff output</td></tr>
+            <tr><td><code>tenore mcp</code></td><td>Shared memory as MCP tools (list, read, search, write) for every agent</td></tr>
             <tr><td><code>tenore check</code></td><td>Exit 1 on drift, conflicts, schema errors or pending changes, for CI</td></tr>
             <tr><td><code>--global</code>, <code>--target</code></td><td>Include <code>~/.agents</code>; override the policy's <code>targets</code></td></tr>
           </tbody>
