@@ -1,0 +1,233 @@
+import { readlink, rm } from "node:fs/promises";
+import { join } from "node:path";
+import type { Adapter, Artifact } from "../adapters/types.ts";
+import type { Warning } from "../ir/diagnostics.ts";
+import { isNotFound, type Layer } from "../ir/parse.ts";
+import type { AdapterId, Scope } from "../ir/schema.ts";
+import { compile } from "./compile.ts";
+import { parseHeader, shortHash } from "./hash.ts";
+import {
+  entryStrategy,
+  type Lock,
+  type LockEntry,
+  lockBase,
+  lockKey,
+  lockPath,
+  ownedHash,
+  readLock,
+  renderLock,
+} from "./lock.ts";
+import { readOptional, renderArtifact, writeArtifact, writeAtomic } from "./write.ts";
+
+/**
+ * - `create` / `update` / `remove`: will be written.
+ * - `unchanged`: on disk already matches.
+ * - `drift`: a generated file was edited since the last sync; never overwritten.
+ * - `conflict`: a file exists that tenore did not generate; never overwritten.
+ */
+export type ActionKind = "create" | "update" | "unchanged" | "remove" | "drift" | "conflict";
+
+export interface Action {
+  kind: ActionKind;
+  scope: Scope;
+  adapter: AdapterId;
+  path: string;
+  /** Current on-disk text (undefined when missing). */
+  before: string | undefined;
+  /** Text after the action (undefined for a removed file). */
+  after: string | undefined;
+  /** Why a drift/conflict was raised. */
+  reason?: string;
+  /** Lock entry to store once applied. */
+  entry?: LockEntry;
+  artifact?: Artifact;
+}
+
+export interface Plan {
+  actions: Action[];
+  warnings: Warning[];
+  /** Lock files and the content they will have after apply. */
+  locks: { path: string; before: string | undefined; after: string | undefined }[];
+}
+
+export const BLOCKING: readonly ActionKind[] = ["drift", "conflict"];
+export const PENDING: readonly ActionKind[] = ["create", "update", "remove"];
+
+/**
+ * Computes what `sync` would do, without touching the disk. `diff` and `check`
+ * are this plan rendered or inspected; `sync` is this plan applied.
+ */
+export async function planSync(
+  adapters: readonly Adapter[],
+  layers: readonly Layer[],
+  scopes: readonly Scope[],
+  root: string,
+  home: string,
+): Promise<Plan> {
+  const actions: Action[] = [];
+  const warnings: Warning[] = [];
+  const locks: Plan["locks"] = [];
+  const mergeWarnings = new Set<string>();
+
+  for (const scope of scopes) {
+    const base = lockBase(scope, root, home);
+    const path = lockPath(scope, root, home);
+    const lockText = await readOptional(path);
+    const lock = await readLock(path);
+    const next: Lock = { version: 1, artifacts: { ...lock.artifacts } };
+    const scopeActions: Action[] = [];
+
+    for (const adapter of adapters) {
+      const { compiled, warnings: merged } = await compile(adapter, layers, [scope], root, home);
+      for (const w of merged) {
+        // Merge warnings are about the whole IR; report each once, not per scope.
+        const key = `${w.code}:${w.message}`;
+        if (!mergeWarnings.has(key)) warnings.push(w);
+        mergeWarnings.add(key);
+      }
+      const emitted = new Set<string>();
+      for (const c of compiled) {
+        warnings.push(...c.warnings);
+        for (const artifact of c.artifacts) {
+          const key = lockKey(base, artifact.path);
+          emitted.add(key);
+          scopeActions.push(await planArtifact(artifact, scope, adapter.id, lock.artifacts[key]));
+        }
+      }
+      for (const [key, entry] of Object.entries(lock.artifacts)) {
+        if (entry.adapter !== adapter.id || emitted.has(key)) continue;
+        scopeActions.push(await planStale(join(base, key), scope, entry));
+      }
+    }
+
+    for (const action of scopeActions) {
+      const key = lockKey(base, action.path);
+      if (action.kind === "remove") delete next.artifacts[key];
+      else if (action.entry) next.artifacts[key] = action.entry;
+    }
+    actions.push(...scopeActions);
+
+    const hasEntries = Object.keys(next.artifacts).length > 0;
+    const after = hasEntries || lockText !== undefined ? renderLock(next) : undefined;
+    if (after !== lockText) locks.push({ path, before: lockText, after });
+  }
+  return { actions, warnings, locks };
+}
+
+async function planArtifact(
+  artifact: Artifact,
+  scope: Scope,
+  adapter: AdapterId,
+  locked: LockEntry | undefined,
+): Promise<Action> {
+  const before = await readCurrent(artifact);
+  const strategy = entryStrategy(artifact.strategy);
+  const base = { scope, adapter, path: artifact.path, before, artifact };
+
+  let after: string;
+  try {
+    after = await renderArtifact(artifact);
+  } catch (error) {
+    // Typically a shared JSON file that is not valid JSON: never clobber it.
+    return { ...base, kind: "conflict", after: undefined, reason: errorMessage(error) };
+  }
+  const entry: LockEntry = { hash: ownedHash(strategy, after), adapter, ...strategy };
+  const ok = (kind: ActionKind): Action => ({ ...base, kind, after, entry });
+
+  if (before === undefined) return ok("create");
+  if (before === after) return ok("unchanged");
+
+  const current = safeOwnedHash(strategy, before);
+  if (locked) {
+    return current === locked.hash
+      ? ok("update")
+      : { ...base, kind: "drift", after, reason: "edited since the last sync", entry: locked };
+  }
+  if (adoptable(strategy, before, current)) return ok("update");
+  return { ...base, kind: "conflict", after, reason: "exists and was not generated by tenore" };
+}
+
+/**
+ * Without a lock entry, an existing file can still be safely replaced when it
+ * provably holds nothing of the user's: a Markdown file whose tenore header
+ * matches its body (lock lost), or a shared JSON file with no owned keys yet.
+ */
+function adoptable(
+  strategy: Pick<LockEntry, "strategy" | "mergeKeys">,
+  before: string,
+  current: string | undefined,
+): boolean {
+  if (strategy.strategy === "merge") {
+    return current !== undefined && current === shortHash("{}");
+  }
+  const header = parseHeader(before);
+  return header !== undefined && header.hash === shortHash(header.body);
+}
+
+/** An artifact no longer emitted: delete it (or its owned keys) unless it was edited. */
+async function planStale(path: string, scope: Scope, entry: LockEntry): Promise<Action> {
+  const before = entry.strategy === "symlink" ? await readLink(path) : await readOptional(path);
+  const base = { scope, adapter: entry.adapter, path, before };
+  if (before === undefined) return { ...base, kind: "remove", after: undefined };
+  if (safeOwnedHash(entry, before) !== entry.hash) {
+    return {
+      ...base,
+      kind: "drift",
+      after: before,
+      reason: "no longer generated, but edited since the last sync",
+      entry,
+    };
+  }
+  if (entry.strategy !== "merge") return { ...base, kind: "remove", after: undefined };
+
+  const artifact: Artifact = {
+    path,
+    content: "{}",
+    strategy: { mergeKeys: entry.mergeKeys ?? [] },
+  };
+  return { ...base, kind: "remove", after: await renderArtifact(artifact), artifact };
+}
+
+/** Executes the writable actions of a plan, then the lock files. */
+export async function applyPlan(plan: Plan): Promise<void> {
+  for (const action of plan.actions) {
+    if (action.kind === "create" || action.kind === "update") {
+      if (action.artifact) await writeArtifact(action.artifact);
+    } else if (action.kind === "remove") {
+      if (action.after !== undefined) await writeAtomic(action.path, action.after);
+      else if (action.before !== undefined) await rm(action.path, { force: true });
+    }
+  }
+  for (const lock of plan.locks) {
+    if (lock.after !== undefined) await writeAtomic(lock.path, lock.after);
+  }
+}
+
+async function readCurrent(artifact: Artifact): Promise<string | undefined> {
+  return artifact.strategy === "symlink" ? readLink(artifact.path) : readOptional(artifact.path);
+}
+
+async function readLink(path: string): Promise<string | undefined> {
+  try {
+    return await readlink(path);
+  } catch (error) {
+    if (isNotFound(error)) return undefined;
+    throw error;
+  }
+}
+
+function safeOwnedHash(
+  entry: Pick<LockEntry, "strategy" | "mergeKeys">,
+  text: string,
+): string | undefined {
+  try {
+    return ownedHash(entry, text);
+  } catch {
+    // Unparseable JSON on disk: no owned hash can match, which the callers treat as drift/conflict.
+    return undefined;
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
