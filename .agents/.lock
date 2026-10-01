@@ -2,7 +2,7 @@
   "version": 1,
   "artifacts": {
     "AGENTS.md": {
-      "hash": "44f017676c8e",
+      "hash": "864e38eeeb5f",
       "adapter": "codex",
       "strategy": "owned"
     },

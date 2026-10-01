@@ -5,7 +5,7 @@ Source of truth: `.agents/AGENTS.md`. `CLAUDE.md` and `AGENTS.md` are generated 
 
 ## What this is
 
-`tenore` compiles a single source of truth in `.agents/` (Markdown + YAML frontmatter) into each coding agent's native config files (Claude Code and Codex CLI implemented; Gemini, Antigravity are stubs). Goal: switching agent is a 1:1 port.
+`tenore` compiles a single source of truth in `.agents/` (Markdown + YAML frontmatter) into each coding agent's native config files (Claude Code, Codex CLI and Antigravity implemented; Gemini CLI dropped). Goal: switching agent is a 1:1 port.
 
 ## Commands
 
