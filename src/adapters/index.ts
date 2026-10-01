@@ -8,7 +8,7 @@ import type { Adapter } from "./types.ts";
 export const adapters: Record<AdapterId, Adapter> = { claude, codex, gemini, antigravity };
 
 /** Adapters with a working emit; stubs are excluded from default sync targets. */
-export const IMPLEMENTED: readonly AdapterId[] = ["claude", "codex"];
+export const IMPLEMENTED: readonly AdapterId[] = ["claude", "codex", "antigravity"];
 
 export type {
   Adapter,

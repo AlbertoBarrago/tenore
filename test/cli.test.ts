@@ -32,7 +32,7 @@ describe("cli", () => {
     expect(init.code).toBe(0);
     expect(init.stdout).toContain("write          .agents/AGENTS.md");
     expect(init.stdout).toContain(
-      "added to .gitignore: .agents/local/, CLAUDE.local.md, AGENTS.override.md",
+      "added to .gitignore: .agents/local/, CLAUDE.local.md, AGENTS.override.md, .agents/rules/tenore-local.md",
     );
     expect(await read(root, ".agents/policy.md")).toContain("yaml-language-server: $schema=");
 

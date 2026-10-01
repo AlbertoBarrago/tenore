@@ -40,7 +40,12 @@ Shared instructions for every coding agent working in this repository.
 Edit this file, then run \`tenore sync\`.
 `;
 
-const GITIGNORE_LINES = [".agents/local/", "CLAUDE.local.md", "AGENTS.override.md"];
+const GITIGNORE_LINES = [
+  ".agents/local/",
+  "CLAUDE.local.md",
+  "AGENTS.override.md",
+  ".agents/rules/tenore-local.md",
+];
 
 /** Creates an empty `.agents/` layout. Existing files are never overwritten. */
 export async function scaffold(

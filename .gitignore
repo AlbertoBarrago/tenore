@@ -6,4 +6,5 @@ coverage/
 .agents/local/
 CLAUDE.local.md
 AGENTS.override.md
+.agents/rules/tenore-local.md
 .claude/settings.local.json
