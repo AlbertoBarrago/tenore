@@ -11,7 +11,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { Artifact } from "../adapters/types.ts";
+import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
+import type { Artifact, DocumentFormat } from "../adapters/types.ts";
 import { canonicalKey, isPlainObject } from "../ir/canonical.ts";
 import { SourceError } from "../ir/diagnostics.ts";
 import { isNotFound } from "../ir/parse.ts";
@@ -24,13 +25,14 @@ import { isNotFound } from "../ir/parse.ts";
  */
 export async function renderArtifact(artifact: Artifact): Promise<string> {
   if (typeof artifact.strategy === "string") return artifact.content;
+  const format = artifact.strategy.format ?? "json";
   const existingText = await readOptional(artifact.path);
-  const existing = existingText === undefined ? {} : parseJsonObject(artifact.path, existingText);
-  const owned = parseJsonObject(artifact.path, artifact.content);
+  const existing = existingText === undefined ? {} : parseFile(format, artifact.path, existingText);
+  const owned = parseFile(format, artifact.path, artifact.content);
   const merged = applyMergeKeys(existing, owned, artifact.strategy.mergeKeys);
   if (existingText !== undefined && canonicalKey(merged) === canonicalKey(existing))
     return existingText;
-  return `${JSON.stringify(merged, null, 2)}\n`;
+  return serializeDocument(format, merged);
 }
 
 /**
@@ -154,15 +156,30 @@ export async function readOptional(path: string): Promise<string | undefined> {
   }
 }
 
-function parseJsonObject(path: string, text: string): Record<string, unknown> {
-  let data: unknown;
+/** Parses a JSON object or a TOML document; throws on syntax errors. */
+export function parseDocument(format: DocumentFormat, text: string): Record<string, unknown> {
+  const data: unknown = format === "toml" ? parseToml(text) : JSON.parse(text);
+  if (!isPlainObject(data)) throw new Error("expected a JSON object");
+  return data;
+}
+
+/**
+ * TOML comments in a merged file do not survive a rewrite; the file is only
+ * rewritten when an owned key actually changes (see renderArtifact).
+ */
+export function serializeDocument(format: DocumentFormat, data: Record<string, unknown>): string {
+  if (format === "json") return `${JSON.stringify(data, null, 2)}\n`;
+  const text = stringifyToml(data);
+  return text === "" ? "" : `${text.replace(/\n+$/, "")}\n`;
+}
+
+function parseFile(format: DocumentFormat, path: string, text: string): Record<string, unknown> {
   try {
-    data = JSON.parse(text);
+    return parseDocument(format, text);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new SourceError([{ path, at: "", message: `invalid JSON: ${message}` }]);
+    throw new SourceError([
+      { path, at: "", message: `invalid ${format.toUpperCase()}: ${message}` },
+    ]);
   }
-  if (!isPlainObject(data))
-    throw new SourceError([{ path, at: "", message: "expected a JSON object" }]);
-  return data;
 }

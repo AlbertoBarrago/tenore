@@ -6,7 +6,7 @@ import { fromZod, SourceError } from "../ir/diagnostics.ts";
 import { layerDirs } from "../ir/parse.ts";
 import { ADAPTER_IDS, type Scope } from "../ir/schema.ts";
 import { shortHash } from "./hash.ts";
-import { readOptional, writeAtomic } from "./write.ts";
+import { parseDocument, readOptional, writeAtomic } from "./write.ts";
 
 /**
  * One lock per scope, next to that scope's sources:
@@ -21,6 +21,7 @@ const LockEntrySchema = z.strictObject({
   adapter: z.enum(ADAPTER_IDS),
   strategy: z.enum(["owned", "symlink", "merge"]),
   mergeKeys: z.array(z.string()).optional(),
+  format: z.enum(["json", "toml"]).optional(),
 });
 export type LockEntry = z.infer<typeof LockEntrySchema>;
 
@@ -77,9 +78,15 @@ export async function writeLock(path: string, lock: Lock): Promise<void> {
   await writeAtomic(path, renderLock(lock));
 }
 
-export function entryStrategy(strategy: Strategy): Pick<LockEntry, "strategy" | "mergeKeys"> {
+export type EntryStrategy = Pick<LockEntry, "strategy" | "mergeKeys" | "format">;
+
+export function entryStrategy(strategy: Strategy): EntryStrategy {
   if (typeof strategy === "string") return { strategy };
-  return { strategy: "merge", mergeKeys: [...strategy.mergeKeys] };
+  return {
+    strategy: "merge",
+    mergeKeys: [...strategy.mergeKeys],
+    ...(strategy.format && strategy.format !== "json" ? { format: strategy.format } : {}),
+  };
 }
 
 /**
@@ -87,9 +94,11 @@ export function entryStrategy(strategy: Strategy): Pick<LockEntry, "strategy" | 
  * symlinks, only the owned JSON paths for merged files, so edits to other keys
  * of a shared settings file are never reported as drift.
  */
-export function ownedHash(entry: Pick<LockEntry, "strategy" | "mergeKeys">, text: string): string {
+export function ownedHash(entry: EntryStrategy, text: string): string {
   if (entry.strategy !== "merge") return shortHash(text);
-  return shortHash(canonicalKey(extractKeys(JSON.parse(text), entry.mergeKeys ?? [])));
+  return shortHash(
+    canonicalKey(extractKeys(parseDocument(entry.format ?? "json", text), entry.mergeKeys ?? [])),
+  );
 }
 
 export function extractKeys(data: unknown, keys: readonly string[]): Record<string, unknown> {

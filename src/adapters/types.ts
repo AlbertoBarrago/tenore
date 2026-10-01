@@ -6,11 +6,14 @@ import type { AdapterId, Ir, Scope } from "../ir/schema.ts";
  * How an artifact is written.
  * - `owned`: the whole file belongs to tenore.
  * - `symlink`: `content` is the link target.
- * - `mergeKeys`: `content` is a JSON object holding only the listed dotted
- *   paths; the writer replaces (or deletes, when absent from `content`) just
- *   those paths in the existing file and leaves everything else untouched.
+ * - `mergeKeys`: `content` is a document (JSON, or TOML with `format: "toml"`)
+ *   holding only the listed dotted paths; the writer replaces (or deletes, when
+ *   absent from `content`) just those paths in the existing file and leaves
+ *   everything else untouched.
  */
-export type Strategy = "owned" | "symlink" | { mergeKeys: string[] };
+export type Strategy = "owned" | "symlink" | { mergeKeys: string[]; format?: DocumentFormat };
+
+export type DocumentFormat = "json" | "toml";
 
 export interface Artifact {
   /** Absolute path. */

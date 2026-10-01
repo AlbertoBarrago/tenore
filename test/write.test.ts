@@ -2,6 +2,7 @@ import { chmod, readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { rebaseImports } from "../src/ir/serialize.ts";
+import { parseHeader, shortHash, withHeader } from "../src/sync/hash.ts";
 import { applyMergeKeys, renderArtifact, writeArtifact } from "../src/sync/write.ts";
 import { writeTree } from "./helpers.ts";
 
@@ -123,5 +124,50 @@ describe("rebaseImports", () => {
 
   it("is the identity when the directory does not change", () => {
     expect(rebaseImports("@x.md", "/a", "/a")).toBe("@x.md");
+  });
+});
+
+describe("TOML merge", () => {
+  const TOML_KEYS = ["approval_policy", "mcp_servers"];
+
+  it("merges owned keys into an existing config.toml, keeping the rest", async () => {
+    const dir = await writeTree({ "config.toml": 'model = "gpt"\napproval_policy = "never"\n' });
+    const out = await renderArtifact({
+      path: join(dir, "config.toml"),
+      content: 'approval_policy = "on-request"\n[mcp_servers.gh]\ncommand = "npx"\n',
+      strategy: { mergeKeys: TOML_KEYS, format: "toml" },
+    });
+    expect(out).toBe(
+      'model = "gpt"\napproval_policy = "on-request"\n\n[mcp_servers.gh]\ncommand = "npx"\n',
+    );
+  });
+
+  it("keeps existing bytes (and comments) when owned keys are unchanged", async () => {
+    const text = '# my config\nmodel = "gpt"  # inline\napproval_policy = "on-request"\n';
+    const dir = await writeTree({ "config.toml": text });
+    const out = await renderArtifact({
+      path: join(dir, "config.toml"),
+      content: 'approval_policy = "on-request"\n',
+      strategy: { mergeKeys: TOML_KEYS, format: "toml" },
+    });
+    expect(out).toBe(text);
+  });
+
+  it("refuses to merge into invalid TOML", async () => {
+    const dir = await writeTree({ "config.toml": "model = " });
+    await expect(
+      renderArtifact({
+        path: join(dir, "config.toml"),
+        content: "",
+        strategy: { mergeKeys: TOML_KEYS, format: "toml" },
+      }),
+    ).rejects.toThrow(/invalid TOML/);
+  });
+});
+
+describe("headers", () => {
+  it.each(["html", "hash"] as const)("%s style round-trips", (style) => {
+    const content = withHeader("body\n", style);
+    expect(parseHeader(content)).toEqual({ hash: shortHash("body\n"), body: "body\n" });
   });
 });

@@ -7,6 +7,7 @@ import type { AdapterId, Scope } from "../ir/schema.ts";
 import { compile } from "./compile.ts";
 import { parseHeader, shortHash } from "./hash.ts";
 import {
+  type EntryStrategy,
   entryStrategy,
   type Lock,
   type LockEntry,
@@ -150,13 +151,9 @@ async function planArtifact(
 /**
  * Without a lock entry, an existing file can still be safely replaced when it
  * provably holds nothing of the user's: a Markdown file whose tenore header
- * matches its body (lock lost), or a shared JSON file with no owned keys yet.
+ * matches its body (lock lost), or a shared JSON/TOML file with no owned keys yet.
  */
-function adoptable(
-  strategy: Pick<LockEntry, "strategy" | "mergeKeys">,
-  before: string,
-  current: string | undefined,
-): boolean {
+function adoptable(strategy: EntryStrategy, before: string, current: string | undefined): boolean {
   if (strategy.strategy === "merge") {
     return current !== undefined && current === shortHash("{}");
   }
@@ -182,8 +179,11 @@ async function planStale(path: string, scope: Scope, entry: LockEntry): Promise<
 
   const artifact: Artifact = {
     path,
-    content: "{}",
-    strategy: { mergeKeys: entry.mergeKeys ?? [] },
+    content: entry.format === "toml" ? "" : "{}",
+    strategy: {
+      mergeKeys: entry.mergeKeys ?? [],
+      ...(entry.format ? { format: entry.format } : {}),
+    },
   };
   return { ...base, kind: "remove", after: await renderArtifact(artifact), artifact };
 }
@@ -216,10 +216,7 @@ async function readLink(path: string): Promise<string | undefined> {
   }
 }
 
-function safeOwnedHash(
-  entry: Pick<LockEntry, "strategy" | "mergeKeys">,
-  text: string,
-): string | undefined {
+function safeOwnedHash(entry: EntryStrategy, text: string): string | undefined {
   try {
     return ownedHash(entry, text);
   } catch {
