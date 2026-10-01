@@ -115,6 +115,32 @@
     th { color: var(--muted); font-weight: 600; }
     .table-wrap { overflow-x: auto; }
 
+    small { font-size: 12px; }
+    .small { font-size: 13px; margin-top: 8px; }
+    .tabs > input { position: absolute; opacity: 0; pointer-events: none; }
+    .tab-labels { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+    .tab-labels label {
+      font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer;
+    }
+    .tab-panel .label { margin-top: 12px; }
+    .tab-panel .label:first-child { margin-top: 0; }
+    /* Tabs are driven by data-active (set by the script at the end); without JS every panel is shown. */
+    .tabs[data-active] .tab-panel { display: none; }
+    .tabs:not([data-active]) .tab-labels { display: none; }
+    .tabs:not([data-active]) .tab-panel { display: block; margin-bottom: 16px; }
+    .tabs[data-active="out-claude"] .tab-panel[data-for="out-claude"],
+    .tabs[data-active="out-codex"] .tab-panel[data-for="out-codex"],
+    .tabs[data-active="out-agy"] .tab-panel[data-for="out-agy"] { display: block; }
+    .tabs[data-active="out-claude"] label[for="out-claude"],
+    .tabs[data-active="out-codex"] label[for="out-codex"],
+    .tabs[data-active="out-agy"] label[for="out-agy"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+    #out-claude:focus-visible ~ .tab-labels label[for="out-claude"],
+    #out-codex:focus-visible ~ .tab-labels label[for="out-codex"],
+    #out-agy:focus-visible ~ .tab-labels label[for="out-agy"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .target small { font-weight: 400; }
+    .pair > div { min-width: 0; }
+
     footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
 
     @media (max-width: 680px) {
@@ -128,7 +154,7 @@
 <body>
   <main>
     <header>
-      <span class="eyebrow">Work in progress · phase 1</span>
+      <span class="eyebrow">Work in progress · v0.1</span>
       <h1>One source.<br><span>Every agent.</span></h1>
       <p class="lead">
         <code>tenore</code> compiles a single <code>.agents/</code> folder (Markdown + YAML)
@@ -141,7 +167,7 @@
       <h2>The problem</h2>
       <p class="muted">
         Claude Code, Codex CLI and Antigravity each have their own format for the same ideas.
-        You write your rules four times, they drift apart, and a permission tightened in one tool
+        You write your rules three times, they drift apart, and a permission tightened in one tool
         stays wide open in another.
       </p>
     </section>
@@ -156,15 +182,15 @@
   local/         <span class="muted"># gitignored</span></pre>
         <div class="arrow" aria-hidden="true">→</div>
         <div class="targets">
-          <div class="target"><b>Claude Code</b><span class="badge ok">done</span></div>
-          <div class="target"><b>Codex CLI</b><span class="badge ok">done</span></div>
-          <div class="target"><b>Antigravity</b><span class="badge ok">done</span></div>
-          
+          <div class="target"><span><b>Claude Code</b><br><small class="muted">CLAUDE.md · settings.json · .mcp.json</small></span><span class="badge ok">done</span></div>
+          <div class="target"><span><b>Codex CLI</b><br><small class="muted">AGENTS.md · config.toml · .rules</small></span><span class="badge ok">done</span></div>
+          <div class="target"><span><b>Antigravity</b><br><small class="muted">.agents/ rules · settings.json · mcp_config.json</small></span><span class="badge ok">done</span></div>
         </div>
       </div>
       <p class="muted" style="margin-top:16px">
         Three scopes merge deterministically: <code>~/.agents</code> (global), <code>&lt;repo&gt;/.agents</code>,
         and <code>.agents/local</code>. Lists concatenate, narrower scalars win, and <b>deny always wins</b>.
+        Pick the agents you use with <code>targets: [claude, codex]</code>, or all of them by default.
       </p>
     </section>
 
@@ -174,11 +200,14 @@
         <div>
           <p class="label">.agents/policy.md</p>
           <pre>---
+targets: [claude, codex, antigravity]
 permissions:
   default: ask
   allow:
     - shell: "npm run test*"
     - fs.write: "src/**"
+  ask:
+    - shell: "git push *"
   deny:
     - fs.read: ".env*"
     - network: none
@@ -187,28 +216,86 @@ mcp:
     command: npx
     args: [-y, "@mcp/github"]
     env:
-      TOKEN: "${env:GITHUB_TOKEN}"
+      GITHUB_TOKEN: "${env:GITHUB_TOKEN}"
+overrides:
+  codex: { permission_profiles: true }
 ---</pre>
         </div>
-        <div>
-          <p class="label">.claude/settings.json (permissions key only)</p>
-          <pre>{
+        <div class="tabs">
+          <input type="radio" name="out" id="out-claude" checked>
+          <input type="radio" name="out" id="out-codex">
+          <input type="radio" name="out" id="out-agy">
+          <div class="tab-labels" role="tablist">
+            <label for="out-claude">Claude Code</label>
+            <label for="out-codex">Codex CLI</label>
+            <label for="out-agy">Antigravity</label>
+          </div>
+          <div class="tab-panel" data-for="out-claude">
+            <p class="label">.claude/settings.json (owned keys only)</p>
+            <pre>{
   "permissions": {
     "allow": [
       "Bash(npm run test*)",
-      "Edit(src/**)"
+      "Edit(/src/**)"
     ],
+    "ask": ["Bash(git push *)"],
     "deny": [
       "Read(.env*)",
       "WebFetch",
       "WebSearch"
-    ]
+    ],
+    "defaultMode": "default"
   }
 }</pre>
-          <p class="label" style="margin-top:12px">.mcp.json</p>
-          <pre>"env": { "TOKEN": "${GITHUB_TOKEN}" }</pre>
+            <p class="label">.mcp.json</p>
+            <pre>"env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" }</pre>
+          </div>
+          <div class="tab-panel" data-for="out-codex">
+            <p class="label">.codex/rules/tenore.rules</p>
+            <pre>prefix_rule(pattern = ["git", "push"], decision = "prompt")</pre>
+            <p class="label">.codex/config.toml (owned keys only)</p>
+            <pre>approval_policy = "on-request"
+web_search = "disabled"
+default_permissions = "tenore"
+
+[mcp_servers.github]
+command = "npx"
+args = [ "-y", "@mcp/github" ]
+env_vars = [ "GITHUB_TOKEN" ]
+
+[permissions.tenore.filesystem.":workspace_roots"]
+"**/.env*" = "deny"
+"src/**" = "write"
+
+[permissions.tenore.network]
+enabled = false</pre>
+          </div>
+          <div class="tab-panel" data-for="out-agy">
+            <p class="label">~/.gemini/antigravity-cli/settings.json (owned keys only)</p>
+            <pre>{
+  "permissions": {
+    "allow": [
+      "command(regex:npm run test.*)",
+      "write_file(src/)"
+    ],
+    "ask": ["command(git push)"],
+    "deny": ["read_url(*)", "execute_url(*)"]
+  },
+  "toolPermission": "request-review"
+}</pre>
+            <p class="label">.agents/mcp_config.json</p>
+            <pre>"github": {
+  "command": "npx",
+  "args": ["-y", "@mcp/github"]
+}</pre>
+            <p class="muted small">GITHUB_TOKEN is inherited from agy's environment, never written.</p>
+          </div>
         </div>
       </div>
+      <p class="muted" style="margin-top:16px">
+        Real output of <code>tenore sync</code>. What a target cannot express (here: <code>.env*</code> globs in
+        Antigravity, which only takes paths) is reported as a warning instead of being silently widened.
+      </p>
     </section>
 
     <section>
@@ -238,6 +325,18 @@ mcp:
           <h3>Atomic writes</h3>
           <p>Temp file plus rename. A crashed sync never leaves a half-written config.</p>
         </div>
+        <div class="card">
+          <h3>Checked against the real CLIs</h3>
+          <p>Codex rules and sandbox profiles are tested with <code>codex execpolicy</code> and <code>codex sandbox</code>; MCP env handling was probed on <code>agy</code>.</p>
+        </div>
+        <div class="card">
+          <h3>No code in config</h3>
+          <p>Executable frontmatter (<code>---js</code>) is refused: a cloned repo cannot run code through tenore.</p>
+        </div>
+        <div class="card">
+          <h3>CI ready</h3>
+          <p><code>tenore check</code> exits 1 on drift, conflicts, schema errors or pending changes.</p>
+        </div>
       </div>
     </section>
 
@@ -247,10 +346,11 @@ mcp:
         <table>
           <thead><tr><th>Command</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>tenore init [--import claude]</code></td><td>Scaffold <code>.agents/</code>, optionally from an existing agent config</td></tr>
-            <tr><td><code>tenore sync</code></td><td>Compile <code>.agents/</code> into every target's native files</td></tr>
+            <tr><td><code>tenore init [--import claude|codex|antigravity]</code></td><td>Scaffold <code>.agents/</code>, or pull an agent's existing config into it</td></tr>
+            <tr><td><code>tenore sync [--prune]</code></td><td>Compile <code>.agents/</code> into every target's native files; <code>--prune</code> removes files of dropped targets</td></tr>
             <tr><td><code>tenore diff</code></td><td>Dry-run sync, unified diff output</td></tr>
-            <tr><td><code>tenore check</code></td><td>Exit 1 on drift or schema errors, for CI</td></tr>
+            <tr><td><code>tenore check</code></td><td>Exit 1 on drift, conflicts, schema errors or pending changes, for CI</td></tr>
+            <tr><td><code>--global</code>, <code>--target</code></td><td>Include <code>~/.agents</code>; override the policy's <code>targets</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -262,5 +362,15 @@ mcp:
       Built by <a href="https://github.com/AlbertoBarrago">alBz</a>.
     </footer>
   </main>
+  <script>
+    // Mirrors the checked radio onto the container so the CSS does not depend on :checked alone.
+    document.querySelectorAll(".tabs").forEach((tabs) => {
+      const checked = tabs.querySelector("input:checked") ?? tabs.querySelector("input");
+      if (checked) tabs.dataset.active = checked.id;
+      tabs.addEventListener("change", (event) => {
+        if (event.target instanceof HTMLInputElement) tabs.dataset.active = event.target.id;
+      });
+    });
+  </script>
 </body>
 </html>

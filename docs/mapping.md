@@ -141,3 +141,25 @@ Settings files are merged on `permissions.allow`, `permissions.ask`,
 | `read_url(*)` + `execute_url(*)` in deny / ask | `network: none` / `restricted` | Domain rules, `unsandboxed(...)`, `mcp(*)` stay in `overrides.antigravity.permissions`. |
 | `toolPermission: "request-review"` / `"strict"` | `default: ask` / `default: deny` | Other presets go to `overrides.antigravity.toolPermission`. |
 | stdio server with literal `env` | `mcp.<name>` | `serverUrl`, `cwd`, headers, any `${` keep the server raw. |
+
+## Codex permission profiles (opt-in)
+
+Enabled with `overrides.codex.permission_profiles: true`. Verified against
+<https://learn.chatgpt.com/docs/permissions> and enforced in tests with `codex sandbox` (macOS seatbelt).
+
+| capability | Codex profile `tenore` (`extends = ":workspace"`) | notes |
+|---|---|---|
+| deny `fs.read` g | `"<g>" = "deny"` | Unanchored names become `**/<g>` under `:workspace_roots`. |
+| deny `fs.write` g | `"<g>" = "read"` | Read-only inside the writable workspace. |
+| allow `fs.write` g | `"<g>" = "write"` | |
+| allow `fs.read` g | `"<g>" = "read"` | Redundant inside the workspace (already readable); useful for absolute paths. |
+| ask `fs.read` / `fs.write` | `"deny"` / `"read"` (warning) | Profiles have no ask: the sandbox blocks and Codex asks to escalate under `on-request`. |
+| `network: none` / `restricted` | `network.enabled = false` (+ `web_search`) | Replaces `sandbox_workspace_write.network_access`: the two do not compose. |
+| `network: full` | `network.enabled = true` | |
+
+- Absolute and `~/` globs are top-level `filesystem` keys; relative ones live under `":workspace_roots"`.
+- Collisions keep the most restrictive access (`deny` < `read` < `write`).
+- Import reads `"read"` under the workspace roots as deny `fs.write`, and on an absolute path as allow
+  `fs.read`, so a relative allow `fs.read` or an absolute deny `fs.write` does not round-trip exactly.
+- Codex ignores profiles when any config layer sets `sandbox_mode` (warning `codex-profiles-beta`).
+- Turning the option off stops managing `default_permissions` / `[permissions.tenore]`; remove them by hand.
