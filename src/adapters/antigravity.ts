@@ -88,10 +88,15 @@ function compile(ir: Ir, ctx: EmitContext): { artifacts: Artifact[]; warnings: W
   const p = ir.permissions;
   const hasPermissions = p.allow.length + p.ask.length + p.deny.length > 0;
   if (paths.settings === undefined) {
-    if (hasPermissions) {
+    if (p.deny.length + p.ask.length > 0) {
       warnings.push({
         code: "antigravity-project-permissions-unsupported",
-        message: `Antigravity reads permissions only from ~/.gemini/antigravity-cli/settings.json: ${ctx.scope} rules are NOT ENFORCED (declare them in ~/.agents/policy.md)`,
+        message: `Antigravity reads permissions only from ~/.gemini/antigravity-cli/settings.json: ${ctx.scope} deny/ask rules are NOT ENFORCED (declare them in ~/.agents/policy.md)`,
+      });
+    } else if (hasPermissions) {
+      warnings.push({
+        code: "antigravity-project-allow-ignored",
+        message: `Antigravity reads permissions only from user settings: ${ctx.scope} allow rules are not granted (it keeps asking)`,
       });
     }
   } else {

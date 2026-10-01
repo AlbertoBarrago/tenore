@@ -139,6 +139,12 @@ export async function importInto(
     importedScopes.push(scope);
   }
 
+  // The import writes repo/local sources: keep the personal ones out of VCS, as `init` does.
+  if (importedScopes.some((s) => s !== "global")) {
+    const added = await ensureGitignore(root);
+    if (added.length > 0) result.notes.push(`added to .gitignore: ${added.join(", ")}`);
+  }
+
   result.adopted = await adoptNative(adapter, root, home, importedScopes);
   return result;
 }

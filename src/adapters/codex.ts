@@ -68,11 +68,19 @@ function compile(ir: Ir, ctx: EmitContext): { artifacts: Artifact[]; warnings: W
   }
 
   if (paths.config === undefined || paths.rules === undefined) {
-    if (hasPolicy(ir)) {
+    const p = ir.permissions;
+    if (p.deny.length + p.ask.length > 0) {
       warnings.push({
         code: "codex-local-policy-unsupported",
         message:
-          "Codex has no local config layer: local permissions and MCP servers are NOT applied to Codex",
+          "Codex has no local config layer: local deny/ask rules are NOT ENFORCED in Codex (move them to .agents/policy.md)",
+      });
+    } else if (hasPolicy(ir)) {
+      // Not granting an allow (or not starting a server) is the restrictive side: informational only.
+      warnings.push({
+        code: "codex-local-allow-ignored",
+        message:
+          "Codex has no local config layer: local allow rules and MCP servers are not applied (Codex keeps asking); only Claude uses them",
       });
     }
     return { artifacts, warnings };

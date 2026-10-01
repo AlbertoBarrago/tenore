@@ -95,7 +95,7 @@ Settings files are merged on `permissions.allow`, `permissions.ask`,
 |---|---|---|---|
 | global (`--global` only) | `~/.codex/AGENTS.md` | `~/.codex/config.toml` | `~/.codex/rules/tenore.rules` |
 | repo | `AGENTS.md` | `.codex/config.toml` | `.codex/rules/tenore.rules` |
-| local | `AGENTS.override.md` (repo + local blocks, gitignored) | none: local permissions and MCP are NOT applied, warning | none |
+| local | `AGENTS.override.md` (repo + local blocks, gitignored) | none: local deny/ask rules are NOT ENFORCED (warning `codex-local-policy-unsupported`); allow rules and MCP servers are simply not granted (`codex-local-allow-ignored`) | none |
 
 - Owned `config.toml` keys: `approval_policy`, `web_search`,
   `sandbox_workspace_write.network_access`, `mcp_servers` (whole table). Other keys are
@@ -123,7 +123,7 @@ Settings files are merged on `permissions.allow`, `permissions.ask`,
 | scope | instructions + memory | permissions | MCP |
 |---|---|---|---|
 | global (`--global` only) | `~/.gemini/config/rules/tenore.md` (always-on, includes `~/.agents/AGENTS.md` and memory) | `~/.gemini/antigravity-cli/settings.json` (`permissions.{allow,ask,deny}`, `toolPermission`) | `~/.gemini/config/mcp_config.json` (`mcpServers`) |
-| repo | `.agents/AGENTS.md` read natively; `.agents/rules/tenore-memory.md` includes memory | none: NOT ENFORCED, warning `antigravity-project-permissions-unsupported` | `.agents/mcp_config.json` (`mcpServers`) |
+| repo | `.agents/AGENTS.md` read natively; `.agents/rules/tenore-memory.md` includes memory | none: deny/ask NOT ENFORCED (warning `antigravity-project-permissions-unsupported`); allow rules are not granted (`antigravity-project-allow-ignored`) | `.agents/mcp_config.json` (`mcpServers`) |
 | local | `.agents/rules/tenore-local.md` (gitignored) includes `.agents/local/` | none: NOT ENFORCED | none |
 
 - Antigravity also reads the root `AGENTS.md`. When the Codex adapter generates it, Antigravity sees the

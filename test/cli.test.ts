@@ -190,3 +190,49 @@ describe("cli: targets and --prune", () => {
     }
   });
 });
+
+describe("cli: init --import keeps personal files out of VCS (markasso regression)", () => {
+  it("adds the local paths to .gitignore when importing local scope in a jj repo", async () => {
+    const root = await writeTree({
+      ".gitignore": "node_modules/\nCLAUDE.md\n.claude/\n",
+      ".claude/settings.local.json": JSON.stringify({
+        permissions: { allow: ["Bash(pnpm build)", "Bash(git status*)"] },
+      }),
+    });
+    await mkdir(join(root, ".jj"));
+    const home = await writeTree({});
+    const res = await run(["init", "--import", "claude"], root, home);
+    expect(res.code).toBe(0);
+    expect(res.stdout).toContain("added to .gitignore: .agents/local/");
+    const gitignore = await read(root, ".gitignore");
+    expect(gitignore.startsWith("node_modules/\nCLAUDE.md\n.claude/\n")).toBe(true);
+    expect(gitignore).toContain(".agents/local/\n");
+
+    expect((await run(["sync"], root, home)).code).toBe(0);
+    const check = await run(["check"], root, home);
+    expect(check.stdout).toBe("ok\n");
+    // Allow-only local rules are informational, not "NOT ENFORCED".
+    expect(check.stderr).toContain("[codex-local-allow-ignored]");
+    expect(check.stderr).toContain("[antigravity-project-allow-ignored]");
+    expect(check.stderr).not.toContain("NOT ENFORCED");
+  });
+
+  it("keeps the loud warning when a local deny cannot be enforced", async () => {
+    const root = await writeTree({
+      ".agents/local/policy.md":
+        "---\npermissions:\n  deny: [{ shell: 'git push --force*' }]\n---\n",
+    });
+    const res = await run(["check"], root, await writeTree({}));
+    expect(res.stderr).toContain("[codex-local-policy-unsupported]");
+    expect(res.stderr).toContain("[antigravity-project-permissions-unsupported]");
+    expect(res.stderr).toContain("NOT ENFORCED");
+  });
+
+  it("does not touch .gitignore for a global-only import", async () => {
+    const root = await writeTree({ ".gitignore": "x\n" });
+    await mkdir(join(root, ".jj"));
+    const home = await writeTree({ ".claude/CLAUDE.md": "global rules\n" });
+    await run(["init", "--import", "claude", "--global"], root, home);
+    expect(await read(root, ".gitignore")).toBe("x\n");
+  });
+});
