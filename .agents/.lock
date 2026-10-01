@@ -1,6 +1,11 @@
 {
   "version": 1,
   "artifacts": {
+    "AGENTS.md": {
+      "hash": "44f017676c8e",
+      "adapter": "codex",
+      "strategy": "owned"
+    },
     "CLAUDE.md": {
       "hash": "c2a6dfbf126c",
       "adapter": "claude",
