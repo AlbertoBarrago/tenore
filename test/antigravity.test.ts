@@ -141,7 +141,7 @@ describe("antigravity emit", () => {
       ".agents/AGENTS.md": "rules\n",
       ".agents/memory/stack.md": "ts\n",
       ".agents/policy.md":
-        "---\nmcp:\n  lint: { command: eslint-mcp, env: { LOG: debug } }\n  gh: { command: x, env: { T: '${env:T}' } }\n  ---\n".replace(
+        "---\nmcp:\n  lint: { command: eslint-mcp, env: { LOG: debug } }\n  gh: { command: x, env: { T: '${env:T}' } }\n  renamed: { command: y, env: { TOKEN: '${env:GH_TOKEN}' } }\n  ---\n".replace(
           "  ---",
           "---",
         ),
@@ -158,7 +158,8 @@ describe("antigravity emit", () => {
     expect(rule).toContain("\n---\n\n@[stack](../memory/stack.md)\n");
     expect(parseHeader(rule)).toBeDefined();
     expect(JSON.parse(byName[".agents/mcp_config.json"]?.content ?? "")).toEqual({
-      mcpServers: { lint: { command: "eslint-mcp", env: { LOG: "debug" } } },
+      // T is left to inheritance (agy passes its own environment); never resolved.
+      mcpServers: { gh: { command: "x" }, lint: { command: "eslint-mcp", env: { LOG: "debug" } } },
     });
     expect(warnings).toEqual(["antigravity-mcp-env-unsupported"]);
   });
@@ -300,5 +301,29 @@ describe("antigravity round-trip", () => {
       "antigravity-import-native-file",
       "antigravity-import-native-file",
     ]);
+  });
+});
+
+describe("antigravity mcp env inheritance", () => {
+  it("never resolves the variable, and init --import keeps the richer IR server", async () => {
+    process.env.GITHUB_TOKEN = "must-not-leak";
+    const root = await writeTree({
+      ".agents/policy.md":
+        "---\nmcp:\n  gh: { command: npx, env: { GITHUB_TOKEN: '${env:GITHUB_TOKEN}' } }\n---\n",
+    });
+    const home = await writeTree({});
+    await applyPlan(
+      await planSync([antigravity], await parseLayers(root, home), ["repo"], root, home),
+    );
+    const { readFile } = await import("node:fs/promises");
+    const written = await readFile(join(root, ".agents/mcp_config.json"), "utf8");
+    expect(written).not.toContain("must-not-leak");
+    expect(JSON.parse(written)).toEqual({ mcpServers: { gh: { command: "npx" } } });
+
+    const [, layer] = await parseLayers(root, home);
+    const imported = await antigravity.import(root, { scope: "repo", root, home });
+    expect(mergePolicy(antigravity, layer, imported.policy, "repo").mcp).toEqual({
+      gh: { command: "npx", env: { GITHUB_TOKEN: "${env:GITHUB_TOKEN}" } },
+    });
   });
 });

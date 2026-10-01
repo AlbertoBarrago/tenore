@@ -42,7 +42,10 @@ export const antigravity: Adapter = {
       const back = rule === undefined ? undefined : fromAntigravityRule(rule, home);
       return back ? { list, cap: back } : undefined;
     },
-    server: (_name, server, scope) => scope !== "local" && !hasEnvRef(server),
+    server: (_name, server, scope) => {
+      const converted = scope === "local" ? undefined : toAntigravityServer(server);
+      return converted !== undefined && converted.inherited.length === 0;
+    },
   },
 
   async detect(root) {
@@ -210,9 +213,11 @@ function settingsFile(
 }
 
 /**
- * Placeholder expansion in `mcp_config.json` is not documented, so a server
- * using `${env:...}` is skipped rather than written with a resolved secret or
- * a placeholder that may be passed through literally.
+ * Verified with agy 1.2.14: `mcp_config.json` values are passed literally (no
+ * `${VAR}` expansion), but the server inherits agy's own environment. So
+ * `KEY: ${env:KEY}` is expressed by leaving KEY out; a renamed or embedded
+ * variable, or one in command/args, cannot be expressed and the server is
+ * skipped. Secrets are never resolved into the file.
  */
 function mcpServers(
   ir: Ir,
@@ -221,18 +226,15 @@ function mcpServers(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, server] of Object.entries(ir.mcp)) {
-    if (hasEnvRef(server)) {
+    const converted = toAntigravityServer(server);
+    if (!converted) {
       warnings.push({
         code: "antigravity-mcp-env-unsupported",
-        message: `MCP server "${name}" uses \${env:...}; Antigravity env expansion is unverified, server not emitted`,
+        message: `MCP server "${name}" uses \${env:...} in command/args or renames a variable; Antigravity passes values literally, server not emitted`,
       });
       continue;
     }
-    out[name] = {
-      command: server.command,
-      ...(server.args ? { args: server.args } : {}),
-      ...(server.env ? { env: server.env } : {}),
-    };
+    out[name] = converted.server;
   }
   if (isPlainObject(raw.mcpServers)) Object.assign(out, raw.mcpServers);
   return Object.fromEntries(
@@ -242,12 +244,27 @@ function mcpServers(
   );
 }
 
-export function hasEnvRef(server: McpServer): boolean {
-  return (
-    ENV_REF.test(server.command) ||
-    (server.args ?? []).some((a) => ENV_REF.test(a)) ||
-    Object.values(server.env ?? {}).some((v) => ENV_REF.test(v))
-  );
+/** `inherited` lists the env keys left to inheritance (lost on import, so not an exact round-trip). */
+export function toAntigravityServer(
+  server: McpServer,
+): { server: Record<string, unknown>; inherited: string[] } | undefined {
+  if (ENV_REF.test(server.command) || (server.args ?? []).some((a) => ENV_REF.test(a)))
+    return undefined;
+  const env: Record<string, string> = {};
+  const inherited: string[] = [];
+  for (const [key, value] of Object.entries(server.env ?? {})) {
+    if (value === `\${env:${key}}`) inherited.push(key);
+    else if (ENV_REF.test(value)) return undefined;
+    else env[key] = value;
+  }
+  return {
+    server: {
+      command: server.command,
+      ...(server.args ? { args: server.args } : {}),
+      ...(Object.keys(env).length > 0 ? { env } : {}),
+    },
+    inherited,
+  };
 }
 
 function generatedRootAgentsMd(root: string): boolean {

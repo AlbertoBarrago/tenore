@@ -11,7 +11,7 @@ Claude Code syntax verified against <https://code.claude.com/docs/en/permissions
 `/agent-configuration/agents-md` and `/extend/mcp`, and against `codex execpolicy check`
 (codex-cli 0.159). Antigravity syntax verified against
 <https://antigravity.google/docs/permissions>, `/rules`, `/mcp` and `/cli/gcli-migration`
-(agy 1.2.14; not exercised at runtime yet). Gemini CLI is dropped: it was replaced by
+(agy 1.2.14; MCP env behavior verified at runtime with a probe server, permissions from docs only). Gemini CLI is dropped: it was replaced by
 Antigravity CLI for consumer plans on 2026-06-18.
 
 ## Path globs (IR semantics)
@@ -69,7 +69,7 @@ Settings files are merged on `permissions.allow`, `permissions.ask`,
 | `AGENTS.md` | `@<relative path>` import | copied into `AGENTS.md` inside `tenore:begin/end` markers | dropped | not emitted for repo (read natively from `.agents/AGENTS.md`); global/local via an always-on rule with `@[...]()` includes | Claude resolves imports relative to the importing file, max 4 hops, and skips them inside code spans and fences. |
 | `memory/<topic>.md` | `@<relative path>` import | copied, one marked block per topic | dropped | `@[topic](../memory/<topic>.md)` include in `.agents/rules/tenore-memory.md` | One import line per topic, in file-name order. |
 | source path with whitespace | content inlined | n/a (always copied) | dropped | content inlined (warning `antigravity-include-inlined`) | `@` imports cannot contain whitespace. Warning `claude-import-inlined`. |
-| `${env:VAR}` | `${VAR}` | `KEY: ${env:KEY}` -> `env_vars = ["KEY"]`; a renamed or embedded variable cannot be expressed: server skipped | dropped | not emitted: env expansion in `mcp_config.json` is unverified, server skipped (warning) | Claude expands `${VAR}` in `.mcp.json` at runtime. Never resolved by tenore. |
+| `${env:VAR}` | `${VAR}` | `KEY: ${env:KEY}` -> `env_vars = ["KEY"]`; a renamed or embedded variable cannot be expressed: server skipped | dropped | `KEY: ${env:KEY}`: KEY omitted, the server inherits agy's environment; renamed or embedded variables and placeholders in command/args cannot be expressed: server skipped (warning). Verified with agy 1.2.14: values are passed literally, no expansion | Claude expands `${VAR}` in `.mcp.json` at runtime. Never resolved by tenore. |
 
 ## Import (Claude to IR)
 

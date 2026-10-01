@@ -193,7 +193,11 @@ export function mergePolicy(
   for (const [name, server] of Object.entries(current.mcp ?? {})) {
     if (!adapter.expresses.server(name, server, scope)) mcp[name] = server;
   }
-  Object.assign(mcp, imported.mcp);
+  // A kept server is one the target cannot write back exactly (e.g. env left to
+  // inheritance): its imported echo must not replace the richer IR definition.
+  for (const [name, server] of Object.entries(imported.mcp ?? {})) {
+    if (!(name in mcp)) mcp[name] = server;
+  }
   if (Object.keys(mcp).length > 0) out.mcp = mcp;
 
   const others = Object.fromEntries(
