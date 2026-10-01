@@ -2,6 +2,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import type { Readable, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { Command, CommanderError, Option } from "commander";
 import { adapters, IMPLEMENTED } from "./adapters/index.ts";
@@ -11,10 +12,17 @@ import { formatIssue, SourceError, type Warning } from "./ir/diagnostics.ts";
 import { mergeLayers } from "./ir/merge.ts";
 import { parseLayers } from "./ir/parse.ts";
 import { ADAPTER_IDS, type AdapterId, type Scope } from "./ir/schema.ts";
+import { memoryTools } from "./mcp/memory.ts";
+import { serve } from "./mcp/protocol.ts";
 import { display, renderDiff } from "./sync/diff.ts";
 import { applyPlan, BLOCKING, PENDING, type Plan, planSync } from "./sync/plan.ts";
 
+export const VERSION = "0.1.0";
+
 export interface Io {
+  /** MCP transport streams; default to the process stdio. */
+  stdin?: Readable;
+  protocolOut?: Writable;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
   cwd: string;
@@ -39,7 +47,7 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   const program = new Command()
     .name("tenore")
     .description("Compile a single .agents/ source of truth into each coding agent's native config")
-    .version("0.1.0")
+    .version(VERSION)
     .exitOverride()
     .configureOutput({ writeOut: io.stdout, writeErr: io.stderr });
 
@@ -86,6 +94,28 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
     .addOption(new Option("--home <dir>", "home directory").default(io.home).hideHelp())
     .action(async (opts: ScopeOptions & { import?: AdapterId; force?: boolean }) => {
       code = await runInit(opts, io);
+    });
+
+  program
+    .command("mcp")
+    .description("serve .agents/ memory as MCP tools over stdio (list, read, search, write)")
+    .option("--root <dir>", "repository root", io.cwd)
+    .option("--global", "also expose the global scope (~/.agents/memory), read and write")
+    .addOption(new Option("--home <dir>", "home directory").default(io.home).hideHelp())
+    .action(async (opts: ScopeOptions) => {
+      const scopes: Scope[] = opts.global ? ["global", "repo", "local"] : ["repo", "local"];
+      const tools = memoryTools({
+        root: resolve(opts.root ?? io.cwd),
+        home: resolve(opts.home ?? io.home),
+        scopes,
+      });
+      // stdout carries the protocol: nothing else may be written there.
+      await serve(
+        tools,
+        { name: "tenore", version: VERSION },
+        io.stdin ?? process.stdin,
+        io.protocolOut ?? process.stdout,
+      );
     });
 
   try {
