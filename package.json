@@ -1,0 +1,38 @@
+{
+  "name": "tenore",
+  "version": "0.1.0",
+  "description": "Single-source config compiler for AI coding agents",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "tenore": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gen:schema": "node --experimental-strip-types scripts/gen-schema.ts"
+  },
+  "dependencies": {
+    "commander": "^14.0.3",
+    "diff": "^9.0.0",
+    "gray-matter": "^4.0.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "@types/node": "^22.20.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
