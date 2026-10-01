@@ -120,7 +120,10 @@ describe("cli", () => {
 
   it("--help and --version exit 0", async () => {
     const root = await writeTree({});
-    expect((await run(["--version"], root, root)).stdout).toBe("0.1.0\n");
+    const { version } = JSON.parse(
+      await readFile(new URL("../package.json", import.meta.url), "utf8"),
+    );
+    expect((await run(["--version"], root, root)).stdout).toBe(`${version}\n`);
     const help = await run(["--help"], root, root);
     expect(help.code).toBe(0);
     expect(help.stdout).toContain("sync");

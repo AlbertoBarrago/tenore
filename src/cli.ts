@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type { Readable, Writable } from "node:stream";
@@ -17,7 +17,15 @@ import { serve } from "./mcp/protocol.ts";
 import { display, renderDiff } from "./sync/diff.ts";
 import { applyPlan, BLOCKING, PENDING, type Plan, planSync } from "./sync/plan.ts";
 
-export const VERSION = "0.1.0";
+/**
+ * Read from package.json (one level up from both src/ and dist/), so the CLI,
+ * the MCP serverInfo and the published package can never disagree.
+ */
+export const VERSION: string = (
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
 
 export interface Io {
   /** MCP transport streams; default to the process stdio. */

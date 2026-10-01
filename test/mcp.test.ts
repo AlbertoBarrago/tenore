@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { main } from "../src/cli.ts";
+import { main, VERSION } from "../src/cli.ts";
 import { writeTree } from "./helpers.ts";
 
 /** Runs `tenore mcp` in-process: sends each message as one line, returns the parsed replies. */
@@ -54,7 +54,7 @@ describe("tenore mcp: protocol", () => {
     expect(replies[0].result).toEqual({
       protocolVersion: "2025-06-18",
       capabilities: { tools: {} },
-      serverInfo: { name: "tenore", version: "0.1.0" },
+      serverInfo: { name: "tenore", version: VERSION },
     });
     expect(replies[1].result.tools.map((t: { name: string }) => t.name)).toEqual([
       "memory_list",
