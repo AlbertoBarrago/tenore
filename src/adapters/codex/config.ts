@@ -2,6 +2,7 @@ import { isPlainObject } from "../../ir/canonical.ts";
 import type { Warning } from "../../ir/diagnostics.ts";
 import type { Capability, Ir, McpServer, PermissionLevel } from "../../ir/schema.ts";
 import type { EmitContext } from "../types.ts";
+import { codexProfile, profilesEnabled } from "./profiles.ts";
 
 /**
  * Keys of `config.toml` tenore owns. `mcp_servers` is owned whole so a removed
@@ -45,7 +46,19 @@ export function codexConfig(
   }
 
   const network = networkLevel(ir);
-  if (network === "none" || network === "restricted") {
+  const profiles = profilesEnabled(ir);
+  if (profiles) {
+    // Profiles and [sandbox_workspace_write] do not compose: network moves into the profile.
+    if (network === "none" || network === "restricted") {
+      config.web_search = network === "none" ? "disabled" : "cached";
+    }
+    Object.assign(config, codexProfile(ir, network, warnings));
+    warnings.push({
+      code: "codex-profiles-beta",
+      message:
+        'Codex permission profiles are beta and are ignored if any config layer sets "sandbox_mode"',
+    });
+  } else if (network === "none" || network === "restricted") {
     // "restricted" has no domain list in the IR; Codex domain rules need the
     // network proxy feature. Fall back to no shell network and cached search.
     config.web_search = network === "none" ? "disabled" : "cached";
@@ -60,7 +73,7 @@ export function codexConfig(
   }
   if (raw.web_search !== undefined && network === undefined) config.web_search = raw.web_search;
   // A raw value is only a round-trip store: it never loosens an IR network rule.
-  if (typeof raw.network_access === "boolean" && network === undefined) {
+  if (typeof raw.network_access === "boolean" && network === undefined && !profiles) {
     config.sandbox_workspace_write = { network_access: raw.network_access };
   }
 
@@ -77,7 +90,7 @@ export function codexConfig(
   return config;
 }
 
-function networkLevel(ir: Ir): "none" | "restricted" | "full" | undefined {
+export function networkLevel(ir: Ir): "none" | "restricted" | "full" | undefined {
   for (const list of ["deny", "ask", "allow"] as const) {
     for (const cap of ir.permissions[list]) if ("network" in cap) return cap.network;
   }

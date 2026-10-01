@@ -9,6 +9,7 @@ import { codexConfig, fsWarnings, OWNED_CONFIG_KEYS, toCodexServer } from "./cod
 import { importCodex } from "./codex/import.ts";
 import { renderBlocks } from "./codex/instructions.ts";
 import { codexPaths } from "./codex/paths.ts";
+import { PROFILE_KEYS, profilesEnabled } from "./codex/profiles.ts";
 import { globToPrefix, renderRules, toPrefixRules } from "./codex/rules.ts";
 import type { Adapter, Artifact, EmitContext } from "./types.ts";
 
@@ -82,12 +83,15 @@ function compile(ir: Ir, ctx: EmitContext): { artifacts: Artifact[]; warnings: W
     artifacts.push({
       path: paths.config,
       content: serializeDocument("toml", config),
-      strategy: { mergeKeys: [...OWNED_CONFIG_KEYS], format: "toml" },
+      strategy: {
+        mergeKeys: [...OWNED_CONFIG_KEYS, ...(profilesEnabled(ir) ? PROFILE_KEYS : [])],
+        format: "toml",
+      },
     });
   }
 
   const shell = toPrefixRules(ir.permissions);
-  warnings.push(...shell.warnings, ...fsWarnings(ir));
+  warnings.push(...shell.warnings, ...(profilesEnabled(ir) ? [] : fsWarnings(ir)));
   const rawRules =
     isPlainObject(ir.overrides.codex) && typeof ir.overrides.codex.rules === "string"
       ? ir.overrides.codex.rules
