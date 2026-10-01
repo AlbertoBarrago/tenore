@@ -44,6 +44,20 @@
         "$ref": "#/$defs/McpServer"
       }
     },
+    "targets": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "claude",
+          "codex",
+          "gemini",
+          "antigravity"
+        ]
+      },
+      "description": "Adapters to run by default (narrowest scope wins; --target overrides)"
+    },
     "overrides": {
       "type": "object",
       "propertyNames": {

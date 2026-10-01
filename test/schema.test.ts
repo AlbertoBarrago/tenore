@@ -25,6 +25,7 @@ const valid: [string, unknown][] = [
   ],
   ["literal dollar", { mcp: { gh: { command: "echo", args: ["$HOME", "cost: 5$"] } } }],
   ["overrides", { overrides: { claude: { permissions: { defaultMode: "auto" } } } }],
+  ["targets", { targets: ["claude", "antigravity"] }],
 ];
 
 const invalid: [string, unknown][] = [

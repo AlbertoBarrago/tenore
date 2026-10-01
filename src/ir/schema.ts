@@ -85,6 +85,16 @@ const McpServers = z.record(
   McpServerSchema,
 );
 
+/**
+ * Adapters `sync`/`diff`/`check` run by default. The narrowest scope that sets
+ * it wins; `--target` on the command line wins over all of them.
+ */
+const Targets = z
+  .array(AdapterIdSchema)
+  .min(1)
+  .refine((ids) => new Set(ids).size === ids.length, { message: "targets must be unique" })
+  .describe("Adapters to run by default (narrowest scope wins; --target overrides)");
+
 const Overrides = z.partialRecord(AdapterIdSchema, z.record(z.string(), z.unknown()));
 
 /** Frontmatter of `.agents/policy.md`. Every field is optional per layer. */
@@ -99,6 +109,7 @@ export const PolicySchema = z
       })
       .optional(),
     mcp: McpServers.optional(),
+    targets: Targets.optional(),
     overrides: Overrides.optional(),
   })
   .meta({
@@ -142,6 +153,8 @@ export const IrSchema = z.strictObject({
   memory: z.array(MemoryBlockSchema),
   permissions: PermissionsSchema,
   mcp: McpServers,
+  /** Absent when no layer sets it: callers fall back to every implemented adapter. */
+  targets: Targets.optional(),
   overrides: Overrides,
 });
 export type Ir = z.infer<typeof IrSchema>;

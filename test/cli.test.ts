@@ -131,3 +131,59 @@ describe("cli", () => {
     expect((await run(["sync", "--target", "cursor"], root, root)).code).not.toBe(0);
   });
 });
+
+describe("cli: targets and --prune", () => {
+  it("policy targets select adapters; --target overrides them", async () => {
+    const root = await writeTree({
+      ".agents/AGENTS.md": "rules\n",
+      ".agents/policy.md": "---\ntargets: [claude]\n---\n",
+    });
+    const home = await writeTree({});
+    expect((await run(["sync"], root, home)).stdout).toBe("create         CLAUDE.md\n");
+    expect((await run(["diff", "--target", "codex"], root, home)).stdout).toContain(
+      "+++ b/AGENTS.md",
+    );
+  });
+
+  it("dropping a target reports its files as orphaned; --prune removes untouched ones", async () => {
+    const root = await writeTree({ ".agents/AGENTS.md": "rules\n" });
+    const home = await writeTree({});
+    await run(["sync"], root, home);
+    expect(await read(root, "AGENTS.md")).toContain("tenore:begin");
+
+    await writeFile(join(root, ".agents/policy.md"), "---\ntargets: [claude]\n---\n");
+    const kept = await run(["sync"], root, home);
+    expect(kept.code).toBe(0);
+    expect(kept.stdout).toContain(
+      "orphan         AGENTS.md (codex is not a target; run with --prune to remove it)",
+    );
+    expect(await read(root, "AGENTS.md")).toContain("tenore:begin");
+    expect((await run(["check"], root, home)).code).toBe(0);
+
+    const pruned = await run(["sync", "--prune"], root, home);
+    expect(pruned.stdout).toContain("remove         AGENTS.md");
+    await expect(read(root, "AGENTS.md")).rejects.toThrow();
+    expect(JSON.parse(await read(root, ".agents/.lock")).artifacts).not.toHaveProperty([
+      "AGENTS.md",
+    ]);
+  });
+
+  it("--prune keeps an orphan that was edited by hand (drift)", async () => {
+    const root = await writeTree({ ".agents/AGENTS.md": "rules\n" });
+    const home = await writeTree({});
+    await run(["sync"], root, home);
+    await writeFile(join(root, "AGENTS.md"), "edited by hand\n");
+    await writeFile(join(root, ".agents/policy.md"), "---\ntargets: [claude]\n---\n");
+    const res = await run(["sync", "--prune"], root, home);
+    expect(res.code).toBe(1);
+    expect(res.stderr).toContain("drift          AGENTS.md");
+    expect(await read(root, "AGENTS.md")).toBe("edited by hand\n");
+  });
+
+  it("rejects duplicate or unknown targets", async () => {
+    for (const targets of ["[claude, claude]", "[]", "[cursor]"]) {
+      const root = await writeTree({ ".agents/policy.md": `---\ntargets: ${targets}\n---\n` });
+      expect((await run(["check"], root, await writeTree({}))).code).toBe(1);
+    }
+  });
+});

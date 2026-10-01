@@ -66,6 +66,9 @@ export function mergeLayers(input: readonly Layer[]): MergeResult {
   const mcp: Ir["mcp"] = {};
   for (const l of layers) Object.assign(mcp, l.policy.mcp);
 
+  let targets: Ir["targets"];
+  for (const l of layers) targets = l.policy.targets ?? targets;
+
   let overrides: Record<string, unknown> = {};
   for (const l of layers) overrides = deepMerge(overrides, l.policy.overrides ?? {});
 
@@ -79,6 +82,7 @@ export function mergeLayers(input: readonly Layer[]): MergeResult {
         .sort()
         .map((k) => [k, mcp[k]]),
     ),
+    ...(targets ? { targets } : {}),
     overrides,
   });
   return { ir, warnings };

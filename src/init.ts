@@ -200,6 +200,9 @@ export function mergePolicy(
   }
   if (Object.keys(mcp).length > 0) out.mcp = mcp;
 
+  // Targets are tenore's own setting: no adapter reads them back.
+  if (current.targets) out.targets = current.targets;
+
   const others = Object.fromEntries(
     Object.entries(current.overrides ?? {}).filter(([id]) => id !== adapter.id),
   );

@@ -10,7 +10,7 @@ import type { Action, Plan } from "./plan.ts";
 export function renderDiff(plan: Plan, cwd: string): string {
   const parts: string[] = [];
   for (const action of plan.actions) {
-    if (action.kind === "unchanged") continue;
+    if (action.kind === "unchanged" || action.kind === "orphan") continue;
     parts.push(patch(display(action.path, cwd), action.before, action.after, label(action)));
   }
   for (const lock of plan.locks)
