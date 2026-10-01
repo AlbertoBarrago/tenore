@@ -131,6 +131,17 @@ Settings files are merged on `permissions.allow`, `permissions.ask`,
 - Generated rule files start with YAML frontmatter (required by Antigravity); the tenore header is a YAML
   comment on line 2.
 
+### Why repo permissions are not written for Antigravity
+
+Observed with agy 1.2.14 (undocumented internals, 2026-10): `/permissions` with the Project scope
+stores rules in `~/.gemini/config/projects/<id>.json` under `permissionGrants.permissionGrants.{allow,ask,deny}`.
+A CLI session in a folder that is not a registered project uses the shared `default-cli-project.json`,
+so "project" rules there apply to every unregistered folder. Per-repository project files (with
+`projectResources.resources[].gitFolder.folderUri`) come from the desktop app and use a different
+shape. Writing there would rely on an unstable internal format and put personal paths in the
+committed lock, so repo and local permissions stay NOT ENFORCED with a warning; declare them in
+`~/.agents/policy.md` instead.
+
 ## Import (Antigravity to IR)
 
 | Antigravity | IR | notes |
