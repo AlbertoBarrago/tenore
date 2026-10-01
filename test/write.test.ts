@@ -166,7 +166,7 @@ describe("TOML merge", () => {
 });
 
 describe("headers", () => {
-  it.each(["html", "hash"] as const)("%s style round-trips", (style) => {
+  it.each(["html", "hash", "frontmatter"] as const)("%s style round-trips", (style) => {
     const content = withHeader("body\n", style);
     expect(parseHeader(content)).toEqual({ hash: shortHash("body\n"), body: "body\n" });
   });
