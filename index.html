@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tenore</title>
+  <meta name="description" content="One .agents/ source of truth, compiled into the native config of every AI coding agent.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #fafaf7;
+      --surface: #ffffff;
+      --text: #1b1b18;
+      --muted: #5f5f58;
+      --border: #e4e3dc;
+      --accent: #b4442b;
+      --accent-soft: #f6e7e2;
+      --code-bg: #f2f1ea;
+      --ok: #2f7a4f;
+      --wip: #9a6b12;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #121210;
+        --surface: #1b1b18;
+        --text: #ecebe4;
+        --muted: #a3a29a;
+        --border: #2e2d29;
+        --accent: #e8775c;
+        --accent-soft: #2c1d18;
+        --code-bg: #201f1c;
+        --ok: #6cc28f;
+        --wip: #e0b252;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.6 Inter, system-ui, sans-serif;
+    }
+    main { max-width: 920px; margin: 0 auto; padding: 0 16px 80px; }
+    a { color: var(--accent); }
+    code, pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.88em; }
+    :not(pre) > code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+    pre {
+      margin: 0;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+    header { padding: 72px 0 40px; }
+    .eyebrow {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--wip);
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      padding: 2px 10px;
+      margin-bottom: 20px;
+    }
+    h1 { font-size: clamp(40px, 8vw, 64px); line-height: 1.05; margin: 0 0 16px; letter-spacing: -0.03em; }
+    h1 span { color: var(--accent); }
+    .lead { font-size: clamp(18px, 2.6vw, 21px); color: var(--muted); max-width: 640px; margin: 0; }
+    h2 { font-size: 24px; letter-spacing: -0.01em; margin: 56px 0 16px; }
+    p { margin: 0 0 12px; }
+    .muted { color: var(--muted); }
+
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    .flow .arrow { font-size: 28px; color: var(--accent); text-align: center; }
+    .targets { display: grid; gap: 8px; }
+    .target {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 14px;
+    }
+    .target b { font-weight: 600; }
+    .badge { font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .badge.ok { color: var(--ok); }
+    .badge.wip { color: var(--wip); }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 16px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .label { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .table-wrap { overflow-x: auto; }
+
+    footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
+
+    @media (max-width: 680px) {
+      header { padding-top: 48px; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .arrow { transform: rotate(90deg); }
+      .pair { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <span class="eyebrow">Work in progress · phase 1</span>
+      <h1>One source.<br><span>Every agent.</span></h1>
+      <p class="lead">
+        <code>tenore</code> compiles a single <code>.agents/</code> folder (Markdown + YAML)
+        into the native instructions, permissions, MCP servers and memory of each AI coding agent.
+        Switching agent becomes a 1:1 port.
+      </p>
+    </header>
+
+    <section>
+      <h2>The problem</h2>
+      <p class="muted">
+        Claude Code, Codex CLI, Gemini CLI and Antigravity each have their own format for the same ideas.
+        You write your rules four times, they drift apart, and a permission tightened in one tool
+        stays wide open in another.
+      </p>
+    </section>
+
+    <section>
+      <h2>How it works</h2>
+      <div class="flow">
+        <pre>.agents/
+  AGENTS.md      <span class="muted"># instructions</span>
+  policy.md      <span class="muted"># permissions, mcp</span>
+  memory/*.md    <span class="muted"># one topic per file</span>
+  local/         <span class="muted"># gitignored</span></pre>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="targets">
+          <div class="target"><b>Claude Code</b><span class="badge ok">in progress</span></div>
+          <div class="target"><b>Codex CLI</b><span class="badge wip">planned</span></div>
+          <div class="target"><b>Gemini CLI</b><span class="badge wip">planned</span></div>
+          <div class="target"><b>Antigravity</b><span class="badge wip">planned</span></div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:16px">
+        Three scopes merge deterministically: <code>~/.agents</code> (global), <code>&lt;repo&gt;/.agents</code>,
+        and <code>.agents/local</code>. Lists concatenate, narrower scalars win, and <b>deny always wins</b>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Write it once</h2>
+      <div class="pair">
+        <div>
+          <p class="label">.agents/policy.md</p>
+          <pre>---
+permissions:
+  default: ask
+  allow:
+    - shell: "npm run test*"
+    - fs.write: "src/**"
+  deny:
+    - fs.read: ".env*"
+    - network: none
+mcp:
+  github:
+    command: npx
+    args: [-y, "@mcp/github"]
+    env:
+      TOKEN: "${env:GITHUB_TOKEN}"
+---</pre>
+        </div>
+        <div>
+          <p class="label">.claude/settings.json (permissions key only)</p>
+          <pre>{
+  "permissions": {
+    "allow": [
+      "Bash(npm run test*)",
+      "Edit(src/**)"
+    ],
+    "deny": [
+      "Read(.env*)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}</pre>
+          <p class="label" style="margin-top:12px">.mcp.json</p>
+          <pre>"env": { "TOKEN": "${GITHUB_TOKEN}" }</pre>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Safe by construction</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Never widens permissions</h3>
+          <p>If a target cannot express a rule exactly, tenore picks the more restrictive option and tells you.</p>
+        </div>
+        <div class="card">
+          <h3>Secrets stay references</h3>
+          <p><code>${env:VAR}</code> is translated, never resolved into a generated file.</p>
+        </div>
+        <div class="card">
+          <h3>Drift detection</h3>
+          <p>Generated files are hashed in <code>.agents/.lock</code>. Hand edits are reported, never overwritten.</p>
+        </div>
+        <div class="card">
+          <h3>Round-trip import</h3>
+          <p>Import your existing <code>CLAUDE.md</code> and settings, sync, import again: same model.</p>
+        </div>
+        <div class="card">
+          <h3>Surgical merges</h3>
+          <p>Shared JSON files are merged on owned keys only. Everything else you configured is left alone.</p>
+        </div>
+        <div class="card">
+          <h3>Atomic writes</h3>
+          <p>Temp file plus rename. A crashed sync never leaves a half-written config.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>CLI</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>tenore init [--import claude]</code></td><td>Scaffold <code>.agents/</code>, optionally from an existing agent config</td></tr>
+            <tr><td><code>tenore sync</code></td><td>Compile <code>.agents/</code> into every target's native files</td></tr>
+            <tr><td><code>tenore diff</code></td><td>Dry-run sync, unified diff output</td></tr>
+            <tr><td><code>tenore check</code></td><td>Exit 1 on drift or schema errors, for CI</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer>
+      Not published yet. Follow the work on
+      <a href="https://github.com/AlbertoBarrago/tenore">github.com/AlbertoBarrago/tenore</a>.
+      Built by <a href="https://github.com/AlbertoBarrago">alBz</a>.
+    </footer>
+  </main>
+</body>
+</html>
