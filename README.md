@@ -230,7 +230,6 @@ Every non-obvious mapping decision is a row in [docs/mapping.md](docs/mapping.md
 - [x] `tenore check` in CI (GitHub Action)
 - [x] `targets` in policy.md, `--prune` for orphaned files
 - [x] Memory MCP server (`tenore mcp`)
-- [x] npm publish ([`tenore-cli`](https://www.npmjs.com/package/tenore-cli))
 
 ## Development
 

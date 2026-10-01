@@ -6,7 +6,9 @@ a `Warning` (visible in `tenore check` / `tenore sync`). Permissions are never
 widened silently.
 
 Claude Code syntax verified against <https://code.claude.com/docs/en/permissions>,
-`/settings`, `/memory` and `/mcp` (October 2026). Codex syntax verified against
+`/settings`, `/memory` and `/mcp` (October 2026). Generated Claude files were also checked with the
+real CLI: `claude mcp list` reads `.mcp.json`, and headless `claude -p` runs confirmed that
+`@` imports load and a `Read(.env*)` deny blocks reads even with `--allowedTools Read`. Codex syntax verified against
 <https://learn.chatgpt.com/docs/config-file/config-reference>, `/agent-configuration/rules`,
 `/agent-configuration/agents-md` and `/extend/mcp`, and against `codex execpolicy check`
 (codex-cli 0.159). Antigravity syntax verified against
