@@ -1,0 +1,66 @@
+# Capability mapping
+
+How each IR construct is expressed by each target. Rule of thumb: when a target
+cannot express a rule exactly, tenore emits the **more restrictive** option and
+a `Warning` (visible in `tenore check` / `tenore sync`). Permissions are never
+widened silently.
+
+Claude Code syntax verified against <https://code.claude.com/docs/en/permissions>,
+`/settings`, `/memory` and `/mcp` (October 2026).
+
+## Path globs (IR semantics)
+
+IR path globs follow gitignore rules, relative to the scope root:
+
+| IR glob | meaning |
+|---|---|
+| `.env*` (no inner `/`) | any file with that name, at any depth |
+| `src/**` (inner `/`) | anchored at the scope root (repo root for repo/local) |
+| `/etc/**` | absolute filesystem path |
+| `~/.ssh/**` | relative to the home directory |
+
+## Permissions
+
+| capability | claude | codex | gemini | antigravity | notes |
+|---|---|---|---|---|---|
+| `{shell: g}` | `Bash(g)` | TBD | TBD | TBD | 1:1. Claude `*` matches any text including spaces, like the IR glob. The legacy `:*` suffix is never emitted: `Bash(x:*)` equals `Bash(x *)`, which is narrower than `x*` (it would not match `x:unit`), so it would widen a deny on round-trip. |
+| `{shell: "*"}` | `Bash` | TBD | TBD | TBD | Bare tool name covers every command. |
+| shell, compound commands | (same) | TBD | TBD | TBD | Claude checks each subcommand of `a && b` / `a \| b` separately. For deny this is stricter than a glob on the whole line; for allow, a compound command needs every part allowed. |
+| `{"fs.read": g}` | `Read(p)` | TBD | TBD | TBD | Read rules also gate Grep and Glob. |
+| `{"fs.write": g}` | `Edit(p)` | TBD | TBD | TBD | Claude ignores `Write(...)` rules; Write and NotebookEdit are governed by `Edit`. |
+| path `.env*` | `.env*` | TBD | TBD | TBD | Bare in Claude. Deny/ask match at any depth (same as IR). Allow matches only at cwd: narrower, so safe. |
+| path `src/**` | `/src/**` | TBD | TBD | TBD | Leading `/` anchors at the settings source, i.e. the project root for `.claude/settings*.json`. Bare `src/**` would be cwd-relative. |
+| path `/etc/**` | `//etc/**` | TBD | TBD | TBD | `//` is Claude's absolute prefix. |
+| path `~/x` | `~/x` | TBD | TBD | TBD | Identical. |
+| anchored path in **global** scope | allow/ask: dropped; deny: bare `p` | TBD | TBD | TBD | User settings have no project root. Dropping an allow, or denying at any depth, is the restrictive fallback. Warning `claude-global-anchored-path`. |
+| `{mcp: "s.t"}` | `mcp__s__t` | TBD | TBD | TBD | Server names may not contain `.` or `__` (schema), so the join is unambiguous. |
+| `{mcp: "s.*"}` | `mcp__s` | TBD | TBD | TBD | Server-wide rule. `mcp__s__*` is also accepted on import. |
+| `{network: "none"}` | deny `WebFetch`, `WebSearch` | TBD | TBD | TBD | The level carries the meaning, whatever list it is in (merge keeps one effective value). Shell commands can still reach the network: warning `claude-network-shell-bypass`. Web access through an MCP server (e.g. telemaco) is governed by explicit `mcp` capabilities, not by `network`. |
+| `{network: "restricted"}` | ask `WebFetch`, `WebSearch` | TBD | TBD | TBD | The IR has no domain allowlist; Claude `WebFetch(domain:x)` rules go in `overrides.claude.permissions`. Same shell warning. |
+| `{network: "full"}` | (nothing) | TBD | TBD | TBD | |
+| network, wider ask + narrower allow | ask stays | TBD | TBD | TBD | Claude settings are emitted per scope and merged natively (deny > ask > allow across files), so a wider-scope ask still wins in Claude even where the merged IR says `full`. Stricter than the IR, never wider. |
+| `default: ask` (explicit) | `defaultMode: "default"` | TBD | TBD | TBD | Emitted only when the layer sets `default`, so an unset repo default does not override the user's own mode. |
+| `default: deny` | `defaultMode: "dontAsk"` | TBD | TBD | TBD | `dontAsk` refuses anything not pre-allowed. |
+| `default: allow` | `defaultMode: "default"` | TBD | TBD | TBD | `bypassPermissions` would widen far beyond "allow by default". Warning `claude-default-allow`. |
+| `overrides.claude.permissions.{allow,ask,deny}` | appended verbatim | n/a | n/a | n/a | Escape hatch and round-trip store for rules the IR cannot express (`WebFetch(domain:...)`, `Skill(...)`, cwd-relative paths). |
+| `overrides.claude.permissions.defaultMode` | `defaultMode` verbatim | n/a | n/a | n/a | Wins over the mapped `default` (e.g. `auto`, `plan`, `acceptEdits`). |
+
+## Files per scope (Claude)
+
+| scope | instructions + memory | permissions | MCP |
+|---|---|---|---|
+| global (`--global` only) | `~/.claude/CLAUDE.md` with `@~/.agents/...` imports | `~/.claude/settings.json` | not emitted (lives in `~/.claude.json`), warning `claude-mcp-scope-unsupported` |
+| repo | `CLAUDE.md` with `@.agents/...` imports | `.claude/settings.json` | `.mcp.json` (owned) |
+| local | `CLAUDE.local.md` with `@.agents/local/...` imports | `.claude/settings.local.json` | not emitted (lives in `~/.claude.json`), same warning |
+
+Settings files are merged on `permissions.allow`, `permissions.ask`,
+`permissions.deny`, `permissions.defaultMode` only; every other key is left untouched.
+
+## Instructions, memory, env
+
+| construct | claude | codex | gemini | antigravity | notes |
+|---|---|---|---|---|---|
+| `AGENTS.md` | `@<relative path>` import | TBD | TBD | TBD | Claude resolves imports relative to the importing file, max 4 hops, and skips them inside code spans and fences. |
+| `memory/<topic>.md` | `@<relative path>` import | TBD | TBD | TBD | One import line per topic, in file-name order. |
+| source path with whitespace | content inlined | TBD | TBD | TBD | `@` imports cannot contain whitespace. Warning `claude-import-inlined`. |
+| `${env:VAR}` | `${VAR}` | TBD | TBD | TBD | Claude expands `${VAR}` in `.mcp.json` at runtime. Never resolved by tenore. |
