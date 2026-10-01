@@ -10,7 +10,7 @@
 
 ## Why
 
-Claude Code, Codex CLI, Gemini CLI and Antigravity each have their own format for
+Claude Code, Codex CLI and Antigravity each have their own format for
 the same ideas: instructions, permissions, MCP servers, memory. You end up writing
 your rules four times, they drift apart, and a permission tightened in one tool
 stays wide open in another.
@@ -116,7 +116,7 @@ generated from the zod schema in [`src/ir/schema.ts`](src/ir/schema.ts). Only
 | Command | What it does | Exit code |
 |---|---|---|
 | `tenore init` | Scaffold `.agents/`; never overwrites existing files | 0 |
-| `tenore init --import <claude\|codex> [--force]` | Pull an agent's existing config into `.agents/` | 1 if `.agents/` files would change without `--force` |
+| `tenore init --import <claude\|codex\|antigravity> [--force]` | Pull an agent's existing config into `.agents/` | 1 if `.agents/` files would change without `--force` |
 | `tenore sync` | Write generated files | 1 on drift or conflict |
 | `tenore diff` | Dry-run `sync` as a unified diff | 0 |
 | `tenore check` | For CI: verify sources and generated files | 1 on schema errors, drift, conflict, or pending changes |
@@ -146,8 +146,8 @@ Common flags: `--root <dir>` (default: cwd), `--global` (include `~/.agents`),
 |---|---|---|---|---|---|
 | Claude Code | `CLAUDE.md`, `CLAUDE.local.md` (via `@` imports) | `.claude/settings*.json` | `.mcp.json` (repo scope) | yes, round-trip tested | done |
 | Codex CLI | `AGENTS.md`, `AGENTS.override.md` (copied, marked blocks) | `.codex/config.toml`, `.codex/rules/tenore.rules` | `config.toml` `[mcp_servers]` | yes, round-trip tested | done (fs rules not yet: beta permission profiles) |
-| Gemini CLI | | | | | planned |
-| Antigravity | | | | | planned |
+| Gemini CLI | | | | | dropped (replaced by Antigravity CLI for consumer plans, 2026-06-18) |
+| Antigravity | `.agents/AGENTS.md` (native), always-on rules with `@[...]()` includes | `~/.gemini/antigravity-cli/settings.json` (user level only) | `.agents/mcp_config.json`, `~/.gemini/config/mcp_config.json` | yes, round-trip tested | done (no project-level permissions upstream) |
 
 Every non-obvious mapping decision is a row in [docs/mapping.md](docs/mapping.md).
 
@@ -157,8 +157,8 @@ Every non-obvious mapping decision is a row in [docs/mapping.md](docs/mapping.md
 - [x] Phase 2: Claude Code adapter (emit, import, round-trip), CLI, lock and drift
 - [x] Codex CLI adapter (instructions, approval policy, network, MCP, shell rules, import)
 - [ ] Codex filesystem rules via permission profiles (beta upstream)
-- [ ] Gemini CLI adapter
-- [ ] Antigravity adapter
+- [x] Antigravity adapter (rules, user permissions, MCP, import)
+- [ ] ~~Gemini CLI adapter~~ dropped: Gemini CLI was replaced by Antigravity CLI
 - [ ] `tenore check` in CI (GitHub Action)
 - [ ] Memory MCP server (`tenore mcp`)
 - [ ] npm publish
