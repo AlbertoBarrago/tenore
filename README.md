@@ -40,7 +40,7 @@ New repository:
 tenore init     # scaffolds .agents/ and gitignores the local scope
 $EDITOR .agents/AGENTS.md .agents/policy.md
 tenore diff     # what sync would write, as a unified diff
-tenore sync     # writes CLAUDE.md, .claude/settings.json, .mcp.json
+tenore sync     # writes CLAUDE.md, AGENTS.md, .claude/settings.json, .codex/config.toml, ...
 ```
 
 Already using Claude Code:
@@ -116,7 +116,7 @@ generated from the zod schema in [`src/ir/schema.ts`](src/ir/schema.ts). Only
 | Command | What it does | Exit code |
 |---|---|---|
 | `tenore init` | Scaffold `.agents/`; never overwrites existing files | 0 |
-| `tenore init --import claude [--force]` | Pull existing Claude config into `.agents/` | 1 if `.agents/` files would change without `--force` |
+| `tenore init --import <claude\|codex> [--force]` | Pull an agent's existing config into `.agents/` | 1 if `.agents/` files would change without `--force` |
 | `tenore sync` | Write generated files | 1 on drift or conflict |
 | `tenore diff` | Dry-run `sync` as a unified diff | 0 |
 | `tenore check` | For CI: verify sources and generated files | 1 on schema errors, drift, conflict, or pending changes |
@@ -145,7 +145,7 @@ Common flags: `--root <dir>` (default: cwd), `--global` (include `~/.agents`),
 | Target | Instructions | Permissions | MCP | Import | Status |
 |---|---|---|---|---|---|
 | Claude Code | `CLAUDE.md`, `CLAUDE.local.md` (via `@` imports) | `.claude/settings*.json` | `.mcp.json` (repo scope) | yes, round-trip tested | done |
-| Codex CLI | | | | | planned |
+| Codex CLI | `AGENTS.md`, `AGENTS.override.md` (copied, marked blocks) | `.codex/config.toml`, `.codex/rules/tenore.rules` | `config.toml` `[mcp_servers]` | yes, round-trip tested | done (fs rules not yet: beta permission profiles) |
 | Gemini CLI | | | | | planned |
 | Antigravity | | | | | planned |
 
@@ -155,7 +155,8 @@ Every non-obvious mapping decision is a row in [docs/mapping.md](docs/mapping.md
 
 - [x] Phase 1: canonical IR, parser, hierarchical merge
 - [x] Phase 2: Claude Code adapter (emit, import, round-trip), CLI, lock and drift
-- [ ] Codex CLI adapter (`AGENTS.md` is its native format)
+- [x] Codex CLI adapter (instructions, approval policy, network, MCP, shell rules, import)
+- [ ] Codex filesystem rules via permission profiles (beta upstream)
 - [ ] Gemini CLI adapter
 - [ ] Antigravity adapter
 - [ ] `tenore check` in CI (GitHub Action)
