@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "artifacts": {
+    "CLAUDE.md": {
+      "hash": "c2a6dfbf126c",
+      "adapter": "claude",
+      "strategy": "owned"
+    }
+  }
+}
