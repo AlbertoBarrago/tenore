@@ -5,6 +5,7 @@
 ![status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
 ![node: >=20](https://img.shields.io/badge/node-%3E%3D20-blue)
 ![license: MIT](https://img.shields.io/badge/license-MIT-green)
+[![npm](https://img.shields.io/npm/v/tenore-cli)](https://www.npmjs.com/package/tenore-cli)
 
 [Landing page](https://albz.it/tenore/) · [Mapping reference](docs/mapping.md) · [Roadmap](#roadmap)
 
@@ -20,7 +21,14 @@ generates each tool's files from it. Switching agent becomes a 1:1 port.
 
 ## Install
 
-Not published to npm yet. From source:
+```sh
+npm install -g tenore-cli     # installs the `tenore` command
+# or, without installing:
+npx -y tenore-cli --help
+```
+
+The npm package is `tenore-cli` (npm reserves names too close to existing ones); the command
+is always `tenore`. From source:
 
 ```sh
 git clone https://github.com/AlbertoBarrago/tenore.git
@@ -128,6 +136,43 @@ Common flags: `--root <dir>` (default: cwd), `--global` (include `~/.agents`),
 `--prune` (remove untouched files of adapters that are no longer targets; without it they
 are reported as `orphan` and kept).
 
+## Web access through MCP (recommended: telemaco)
+
+`network: none` closes each agent's *native* web tools (Claude `WebFetch`/`WebSearch`, Codex
+web search and sandbox network, Antigravity `read_url`/`execute_url`). It does not touch MCP
+servers, so web access can go through one MCP server you choose, governed by explicit `mcp`
+rules and identical in every agent.
+
+Any web or browser MCP server works. We recommend
+[telemaco](https://github.com/AlbertoBarrago/telemaco), a lightweight headless browser built
+for AI agents:
+
+```sh
+brew tap albertobarrago/telemaco && brew install telemaco
+# or: curl -fsSL https://raw.githubusercontent.com/AlbertoBarrago/telemaco/main/install.sh | bash
+```
+
+Then declare it once in `.agents/policy.md` (or `~/.agents/policy.md` for every project):
+
+```yaml
+permissions:
+  deny:
+    - network: none            # no native web tools
+  ask:
+    - mcp: "telemaco.*"        # web only through telemaco, with confirmation
+mcp:
+  telemaco:
+    command: telemaco
+    args: ["mcp"]
+```
+
+Swap `telemaco` for any other server (name, command, args) and the same rules apply. On
+Antigravity, permission rules are only read from the user settings, so put them in
+`~/.agents/policy.md` and sync with `--global` to enforce them there too. Prefer
+declaring the server here over `telemaco install`, which edits each agent's config directly:
+tenore would then report those files as drifted. If you already ran it, `tenore init --import
+<agent> --force` pulls the server into `.agents/`.
+
 ## Memory MCP server
 
 `tenore mcp` lets any agent read and update the shared memory in `.agents/memory/` (and
@@ -138,7 +183,7 @@ are reported as `orphan` and kept).
 mcp:
   tenore-memory:
     command: npx
-    args: ["-y", "tenore", "mcp"]
+    args: ["-y", "tenore-cli", "mcp"]
 ```
 
 Writes are confined to the memory directories: topics are plain file names (no `/`, no `..`,
@@ -185,7 +230,7 @@ Every non-obvious mapping decision is a row in [docs/mapping.md](docs/mapping.md
 - [x] `tenore check` in CI (GitHub Action)
 - [x] `targets` in policy.md, `--prune` for orphaned files
 - [x] Memory MCP server (`tenore mcp`)
-- [ ] npm publish
+- [x] npm publish ([`tenore-cli`](https://www.npmjs.com/package/tenore-cli))
 
 ## Development
 
