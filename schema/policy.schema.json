@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "ask",
+            "deny"
+          ]
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "ask": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Capability"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "mcp": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9-]+(?:_[A-Za-z0-9-]+)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/McpServer"
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "enum": [
+          "claude",
+          "codex",
+          "gemini",
+          "antigravity"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {}
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "tenore policy",
+  "description": "Frontmatter of .agents/policy.md",
+  "$defs": {
+    "Capability": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "shell": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Glob on the full command line"
+            }
+          },
+          "required": [
+            "shell"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "fs.read": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Gitignore-style glob on the path"
+            }
+          },
+          "required": [
+            "fs.read"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "fs.write": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Gitignore-style glob on the path"
+            }
+          },
+          "required": [
+            "fs.write"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "network": {
+              "type": "string",
+              "enum": [
+                "none",
+                "restricted",
+                "full"
+              ]
+            }
+          },
+          "required": [
+            "network"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mcp": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]+(?:_[A-Za-z0-9-]+)*\\.(?:\\*|[A-Za-z0-9_-]+)$"
+            }
+          },
+          "required": [
+            "mcp"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "McpServer": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?:[^$]|\\$(?!\\{)|\\$\\{env:[A-Za-z_][A-Za-z0-9_]*\\})*$"
+        },
+        "args": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[^$]|\\$(?!\\{)|\\$\\{env:[A-Za-z_][A-Za-z0-9_]*\\})*$"
+          }
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(?:[^$]|\\$(?!\\{)|\\$\\{env:[A-Za-z_][A-Za-z0-9_]*\\})*$"
+          }
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
