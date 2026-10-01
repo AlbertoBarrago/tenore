@@ -1,11 +1,33 @@
 {
-  "name": "tenore",
+  "name": "tenore-cli",
   "version": "0.1.0",
   "description": "Single-source config compiler for AI coding agents",
+  "keywords": [
+    "ai",
+    "agents",
+    "coding-agents",
+    "claude-code",
+    "codex",
+    "antigravity",
+    "agents-md",
+    "mcp",
+    "config",
+    "permissions",
+    "cli"
+  ],
+  "homepage": "https://albz.it/tenore/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlbertoBarrago/tenore.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AlbertoBarrago/tenore/issues"
+  },
+  "author": "Alberto Barrago (https://github.com/AlbertoBarrago)",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "tenore": "./dist/cli.js"
+    "tenore": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -15,13 +37,15 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:schema": "node --experimental-strip-types scripts/gen-schema.ts"
+    "gen:schema": "node --experimental-strip-types scripts/gen-schema.ts",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "commander": "^14.0.3",
