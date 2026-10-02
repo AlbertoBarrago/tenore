@@ -45,7 +45,8 @@
     "test:watch": "vitest",
     "gen:schema": "node --experimental-strip-types scripts/gen-schema.ts",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build",
+    "gen:assets": "sh scripts/gen-assets.sh"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

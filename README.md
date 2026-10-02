@@ -1,4 +1,8 @@
-# tenore
+<p align="center">
+  <img src="https://raw.githubusercontent.com/AlbertoBarrago/tenore/main/assets/logo-256.png" alt="tenore logo" width="112" height="112">
+</p>
+
+<h1 align="center">tenore</h1>
 
 **One `.agents/` source of truth, compiled into the native config of every AI coding agent.**
 
@@ -250,6 +254,7 @@ npm run lint         # biome
 npm test             # vitest
 npx vitest run test/merge.test.ts   # one file
 npm run gen:schema   # regenerate schema/policy.schema.json
+npm run gen:assets   # regenerate logo PNGs and the og.png link preview (rsvg-convert + Chrome)
 ```
 
 Architecture: `parse` (one layer per scope) -> `merge` -> `Adapter.emit` per scope

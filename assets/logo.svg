@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">tenore</title>
+  <rect width="64" height="64" rx="14" fill="#b4442b"/>
+  <g stroke="#fff" stroke-width="1.6" opacity=".22">
+    <path d="M8 18 H56 M8 25.5 H56 M8 33 H56 M8 40.5 H56 M8 48 H56"/>
+  </g>
+  <g stroke="#fff" stroke-linecap="round" fill="none" stroke-width="5.5">
+    <path d="M17 25.5 H45"/>
+    <path d="M28 12 V40 a9 9 0 0 0 9 9 h6"/>
+  </g>
+</svg>
