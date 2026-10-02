@@ -1,6 +1,6 @@
 {
   "name": "tenore-cli",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Single-source config compiler for AI coding agents",
   "keywords": [
     "ai",
@@ -34,7 +34,7 @@
     "schema"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "scripts": {
     "build": "npm run clean && tsc -p tsconfig.build.json",
@@ -48,6 +48,7 @@
     "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
+    "@clack/prompts": "^1.8.1",
     "commander": "^14.0.3",
     "diff": "^9.0.0",
     "gray-matter": "^4.0.3",

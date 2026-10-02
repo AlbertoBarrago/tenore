@@ -9,9 +9,17 @@ import {
   MEMORY_DIR,
   POLICY_FILE,
   parseLayers,
+  parsePolicy,
 } from "./ir/parse.ts";
-import type { Capability, McpServer, PermissionLevel, Policy, Scope } from "./ir/schema.ts";
-import { layerFiles, renderPolicy } from "./ir/serialize.ts";
+import {
+  type Capability,
+  type McpServer,
+  type PermissionLevel,
+  type Policy,
+  PolicySchema,
+  type Scope,
+} from "./ir/schema.ts";
+import { layerFiles, renderPolicy, SCHEMA_COMMENT } from "./ir/serialize.ts";
 import {
   entryStrategy,
   lockBase,
@@ -52,6 +60,7 @@ export async function scaffold(
   root: string,
   home: string,
   scope: "global" | "repo",
+  options: { gitignore?: boolean } = {},
 ): Promise<InitResult> {
   const dir = layerDirs(root, home)[scope];
   const result: InitResult = { written: [], blocked: [], adopted: [], notes: [], warnings: [] };
@@ -65,7 +74,7 @@ export async function scaffold(
     await writeAtomic(path, content);
     result.written.push(path);
   }
-  if (scope === "repo") {
+  if (scope === "repo" && options.gitignore !== false) {
     const added = await ensureGitignore(root);
     if (added.length > 0) result.notes.push(`added to .gitignore: ${added.join(", ")}`);
   }
@@ -76,13 +85,10 @@ export async function scaffold(
  * Appends the local-only paths to `.gitignore`, only in a VCS checkout or
  * where a `.gitignore` already exists.
  */
-async function ensureGitignore(root: string): Promise<string[]> {
+export async function ensureGitignore(root: string): Promise<string[]> {
   const path = join(root, ".gitignore");
   const current = await readOptional(path);
-  if (current === undefined && !existsSync(join(root, ".git")) && !existsSync(join(root, ".jj")))
-    return [];
-  const lines = new Set((current ?? "").split("\n").map((l) => l.trim()));
-  const missing = GITIGNORE_LINES.filter((l) => !lines.has(l) && !lines.has(`/${l}`));
+  const missing = await missingGitignoreLines(root);
   if (missing.length === 0) return [];
   const prefix =
     current === undefined || current === "" || current.endsWith("\n")
@@ -90,6 +96,16 @@ async function ensureGitignore(root: string): Promise<string[]> {
       : `${current}\n`;
   await writeAtomic(path, `${prefix}${missing.join("\n")}\n`);
   return missing;
+}
+
+/** Local-only paths not yet ignored; empty outside a VCS checkout without a `.gitignore`. */
+export async function missingGitignoreLines(root: string): Promise<string[]> {
+  const current = await readOptional(join(root, ".gitignore"));
+  if (current === undefined && !existsSync(join(root, ".git")) && !existsSync(join(root, ".jj"))) {
+    return [];
+  }
+  const lines = new Set((current ?? "").split("\n").map((l) => l.trim()));
+  return GITIGNORE_LINES.filter((l) => !lines.has(l) && !lines.has(`/${l}`));
 }
 
 /**
@@ -106,6 +122,7 @@ export async function importInto(
   home: string,
   scopes: readonly Scope[],
   force: boolean,
+  options: { gitignore?: boolean } = {},
 ): Promise<InitResult> {
   const result: InitResult = { written: [], blocked: [], adopted: [], notes: [], warnings: [] };
   const existing = await parseLayers(root, home);
@@ -140,7 +157,7 @@ export async function importInto(
   }
 
   // The import writes repo/local sources: keep the personal ones out of VCS, as `init` does.
-  if (importedScopes.some((s) => s !== "global")) {
+  if (options.gitignore !== false && importedScopes.some((s) => s !== "global")) {
     const added = await ensureGitignore(root);
     if (added.length > 0) result.notes.push(`added to .gitignore: ${added.join(", ")}`);
   }
@@ -222,7 +239,7 @@ export function mergePolicy(
  * Records the current owned hash of each native file that sync would refuse
  * to touch (conflict or drift), now that its content lives in `.agents/`.
  */
-async function adoptNative(
+export async function adoptNative(
   adapter: Adapter,
   root: string,
   home: string,
@@ -256,7 +273,7 @@ async function adoptNative(
   return adopted;
 }
 
-function isEmpty(r: ImportResult): boolean {
+export function isEmpty(r: ImportResult): boolean {
   const policy = r.policy;
   return (
     r.instructions.length === 0 &&
@@ -265,4 +282,26 @@ function isEmpty(r: ImportResult): boolean {
     !policy.mcp &&
     !(isPlainObject(policy.overrides) && Object.keys(policy.overrides).length > 0)
   );
+}
+
+/**
+ * Applies `mutate` to a layer's `policy.md` (created when missing) and writes
+ * it back validated. The file is re-rendered, so YAML comments other than the
+ * schema hint are lost: `lostComments` tells the caller to warn about it.
+ */
+export async function updatePolicy(
+  root: string,
+  home: string,
+  scope: Scope,
+  mutate: (policy: Policy) => Policy,
+): Promise<{ path: string; lostComments: boolean }> {
+  const path = join(layerDirs(root, home)[scope], POLICY_FILE);
+  const text = await readOptional(path);
+  const current = text === undefined ? {} : parsePolicy(path, text).policy;
+  const next = PolicySchema.parse(mutate(structuredClone(current)));
+  const comments = (text ?? "")
+    .split("\n")
+    .filter((l) => l.trimStart().startsWith("#") && l.trim() !== SCHEMA_COMMENT);
+  await writeAtomic(path, renderPolicy(next));
+  return { path, lostComments: comments.length > 0 };
 }

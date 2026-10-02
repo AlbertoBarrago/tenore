@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { Command, CommanderError, Option } from "commander";
 import { adapters, IMPLEMENTED } from "./adapters/index.ts";
 import type { Adapter } from "./adapters/types.ts";
-import { type InitResult, importInto, scaffold } from "./init.ts";
+import { type InitResult, importInto, scaffold, updatePolicy } from "./init.ts";
 import { formatIssue, SourceError, type Warning } from "./ir/diagnostics.ts";
 import { mergeLayers } from "./ir/merge.ts";
 import { parseLayers } from "./ir/parse.ts";
@@ -16,6 +16,13 @@ import { memoryTools } from "./mcp/memory.ts";
 import { serve } from "./mcp/protocol.ts";
 import { display, renderDiff } from "./sync/diff.ts";
 import { applyPlan, BLOCKING, PENDING, type Plan, planSync } from "./sync/plan.ts";
+import {
+  clackPrompter,
+  defaultsPrompter,
+  type Prompter,
+  runWizard,
+  WizardCancelled,
+} from "./wizard.ts";
 
 /**
  * Read from package.json (one level up from both src/ and dist/), so the CLI,
@@ -28,6 +35,12 @@ export const VERSION: string = (
 ).version;
 
 export interface Io {
+  /** Whether `tenore init` may ask questions; defaults to "stdin and stdout are TTYs". */
+  interactive?: boolean;
+  /** Wizard question source; defaults to clack (or to the defaults with --yes). */
+  prompter?: Prompter;
+  /** Whether a command is on PATH (wizard offers telemaco only then); injectable for tests. */
+  onPath?: (command: string) => boolean;
   /** MCP transport streams; default to the process stdio. */
   stdin?: Readable;
   protocolOut?: Writable;
@@ -99,8 +112,10 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
       new Option("--import <id>", "import native config of this adapter").choices([...IMPLEMENTED]),
     )
     .option("--force", "overwrite existing .agents/ files with the imported content")
+    .option("--targets <ids>", "set targets in policy.md, comma separated (e.g. claude,codex)")
+    .option("--yes", "run the setup wizard non-interactively, accepting every default")
     .addOption(new Option("--home <dir>", "home directory").default(io.home).hideHelp())
-    .action(async (opts: ScopeOptions & { import?: AdapterId; force?: boolean }) => {
+    .action(async (opts: InitOptions) => {
       code = await runInit(opts, io);
     });
 
@@ -205,18 +220,70 @@ function printWarnings(warnings: readonly Warning[], io: Io): void {
   for (const w of warnings) io.stderr(`warning: [${w.code}] ${w.message}\n`);
 }
 
-async function runInit(
-  opts: ScopeOptions & { import?: AdapterId; force?: boolean },
-  io: Io,
-): Promise<number> {
+type InitOptions = ScopeOptions & {
+  import?: AdapterId;
+  force?: boolean;
+  targets?: string;
+  yes?: boolean;
+};
+
+async function runInit(opts: InitOptions, io: Io): Promise<number> {
   const root = resolve(opts.root ?? io.cwd);
   const home = resolve(opts.home ?? io.home);
+
+  // Plain `tenore init` in a terminal (or with --yes) runs the wizard; any other flag keeps it scriptable.
+  const interactive = io.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  // --global selects the scope; it does not turn the wizard off.
+  const flags = opts.import !== undefined || opts.targets !== undefined || opts.force;
+  if (!flags && (opts.yes || interactive)) {
+    const prompter = io.prompter ?? (opts.yes ? defaultsPrompter(io.stdout) : clackPrompter());
+    try {
+      return await runWizard({
+        root,
+        home,
+        global: opts.global === true,
+        prompter,
+        print: io.stdout,
+        ...(io.onPath ? { onPath: io.onPath } : {}),
+      });
+    } catch (error) {
+      if (!(error instanceof WizardCancelled)) throw error;
+      io.stderr("cancelled: nothing was written\n");
+      return 1;
+    }
+  }
+
+  let targets: AdapterId[] | undefined;
+  if (opts.targets !== undefined) {
+    const ids = opts.targets
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t !== "");
+    const unknown = ids.filter((id) => !IMPLEMENTED.includes(id as AdapterId));
+    if (ids.length === 0 || unknown.length > 0) {
+      io.stderr(`error: --targets expects a comma separated list of: ${IMPLEMENTED.join(", ")}\n`);
+      return 1;
+    }
+    targets = [...new Set(ids)] as AdapterId[];
+  }
+
   let result: InitResult;
   if (opts.import) {
     const scopes: Scope[] = opts.global ? ["global"] : ["repo", "local"];
     result = await importInto(adapters[opts.import], root, home, scopes, opts.force ?? false);
   } else {
     result = await scaffold(root, home, opts.global ? "global" : "repo");
+  }
+
+  if (targets) {
+    const scope: Scope = opts.global ? "global" : "repo";
+    const updated = await updatePolicy(root, home, scope, (policy) => ({ ...policy, targets }));
+    result.notes.push(`targets: ${targets.join(", ")} (${display(updated.path, root)})`);
+    if (updated.lostComments)
+      result.warnings.push({
+        code: "policy-rewritten",
+        message: "policy.md was rewritten: its YAML comments were not kept",
+      });
   }
 
   printWarnings(result.warnings, io);
@@ -231,7 +298,8 @@ async function runInit(
     );
     return 1;
   }
-  if (result.written.length === 0 && result.adopted.length === 0) io.stdout("nothing to do\n");
+  if (result.written.length === 0 && result.adopted.length === 0 && !targets)
+    io.stdout("nothing to do\n");
   else io.stdout("\nnext: review .agents/, then run `tenore diff` and `tenore sync`\n");
   return 0;
 }
