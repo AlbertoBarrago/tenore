@@ -346,7 +346,9 @@ enabled = false</pre>
         <table>
           <thead><tr><th>Command</th><th>What it does</th></tr></thead>
           <tbody>
-            <tr><td><code>tenore init [--import claude|codex|antigravity]</code></td><td>Scaffold <code>.agents/</code>, or pull an agent's existing config into it</td></tr>
+            <tr><td><code>tenore init</code></td><td>Setup wizard: import existing config, pick target agents, preview and sync. Prints the equivalent commands</td></tr>
+            <tr><td><code>tenore init --import claude|codex|antigravity</code></td><td>Pull an agent's existing config into <code>.agents/</code></td></tr>
+            <tr><td><code>tenore init --targets claude,codex</code></td><td>Choose which agents get generated files</td></tr>
             <tr><td><code>tenore sync [--prune]</code></td><td>Compile <code>.agents/</code> into every target's native files; <code>--prune</code> removes files of dropped targets</td></tr>
             <tr><td><code>tenore diff</code></td><td>Dry-run sync, unified diff output</td></tr>
             <tr><td><code>tenore mcp</code></td><td>Shared memory as MCP tools (list, read, search, write) for every agent</td></tr>

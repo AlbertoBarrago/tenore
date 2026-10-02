@@ -3,7 +3,7 @@
 **One `.agents/` source of truth, compiled into the native config of every AI coding agent.**
 
 ![status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![node: >=20](https://img.shields.io/badge/node-%3E%3D20-blue)
+![node: >=20.12](https://img.shields.io/badge/node-%3E%3D20.12-blue)
 ![license: MIT](https://img.shields.io/badge/license-MIT-green)
 [![npm](https://img.shields.io/npm/v/tenore-cli)](https://www.npmjs.com/package/tenore-cli)
 
@@ -38,28 +38,33 @@ npm run build
 npm link        # puts `tenore` on your PATH
 ```
 
-Runtime: Node >= 20. Running the test suite needs Node >= 22.12.
+Runtime: Node >= 20.12. Running the test suite needs Node >= 22.12.
 
 ## Quick start
 
-New repository:
-
 ```sh
-tenore init     # scaffolds .agents/ and gitignores the local scope
-$EDITOR .agents/AGENTS.md .agents/policy.md
-tenore diff     # what sync would write, as a unified diff
-tenore sync     # writes CLAUDE.md, AGENTS.md, .claude/settings.json, .codex/config.toml, ...
+cd your-project
+tenore init
 ```
 
-Already using Claude Code:
+In a terminal, `tenore init` is a short wizard: it finds existing agent config (CLAUDE.md,
+AGENTS.md, `.claude/`, `.codex/`, ...), imports what you pick into `.agents/`, asks which agents
+to generate files for, offers to update `.gitignore` and to register the memory and web MCP
+servers, previews the sync and runs it. Nothing is written until you confirm, and it ends by
+printing the equivalent commands, so you can script the same setup:
 
 ```sh
-tenore init --import claude   # CLAUDE.md, settings and .mcp.json -> .agents/
-tenore diff
-tenore sync                   # native files are now generated from .agents/
+tenore init --import claude          # CLAUDE.md, .claude/settings*.json, .mcp.json -> .agents/
+tenore init --import codex           # AGENTS.md, .codex/ -> .agents/
+tenore init --targets claude,codex   # which agents to generate files for
+tenore diff                          # what sync would write, as a unified diff
+tenore sync                          # write the native files
 ```
 
-Your global setup works the same way with `--global` (`~/.claude/` <-> `~/.agents/`).
+`tenore init --yes` runs the wizard with every default (no TTY needed). Any other flag, or a
+non-interactive shell, keeps the plain commands above. Your global setup works the same way with
+`--global`: `tenore init --global` runs the same wizard on your personal config (`~/.claude`,
+`~/.codex`, `~/.gemini` <-> `~/.agents/`) and shows the full diff before touching any of it.
 
 ## Source layout
 
@@ -124,7 +129,9 @@ generated from the zod schema in [`src/ir/schema.ts`](src/ir/schema.ts). Only
 
 | Command | What it does | Exit code |
 |---|---|---|
-| `tenore init` | Scaffold `.agents/`; never overwrites existing files | 0 |
+| `tenore init` | Setup wizard in a terminal; otherwise scaffold `.agents/` (never overwrites) | 1 if cancelled |
+| `tenore init --targets <ids>` | Set `targets` in policy.md (comma separated) | 1 on unknown ids |
+| `tenore init --yes` | Run the wizard with every default | as `init` |
 | `tenore init --import <claude\|codex\|antigravity> [--force]` | Pull an agent's existing config into `.agents/` | 1 if `.agents/` files would change without `--force` |
 | `tenore sync` | Write generated files | 1 on drift or conflict |
 | `tenore diff` | Dry-run `sync` as a unified diff | 0 |
