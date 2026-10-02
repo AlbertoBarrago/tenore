@@ -73,6 +73,13 @@ Settings files are merged on `permissions.allow`, `permissions.ask`,
 | source path with whitespace | content inlined | n/a (always copied) | dropped | content inlined (warning `antigravity-include-inlined`) | `@` imports cannot contain whitespace. Warning `claude-import-inlined`. |
 | `${env:VAR}` | `${VAR}` | `KEY: ${env:KEY}` -> `env_vars = ["KEY"]`; a renamed or embedded variable cannot be expressed: server skipped | dropped | `KEY: ${env:KEY}`: KEY omitted, the server inherits agy's environment; renamed or embedded variables and placeholders in command/args cannot be expressed: server skipped (warning). Verified with agy 1.2.14: values are passed literally, no expansion | Claude expands `${VAR}` in `.mcp.json` at runtime. Never resolved by tenore. |
 
+## Importing several agents at once
+
+| path | semantics | used by |
+|---|---|---|
+| `tenore init --import <agent>` | The agent's native files are authoritative for what it can express (`Adapter.expresses`); everything else in the existing layer is kept. | Drift recovery, re-import of one agent. |
+| `tenore init` / `init --global` wizard, first setup | Union of every selected agent's import: rules, MCP servers and memory topics are all kept (first agent wins on a name clash). When agents carry different instructions, the user picks one or concatenates them. A file that only `@`-imports another (`CLAUDE.md` = `@AGENTS.md`) is treated as a pointer, not as content. | Onboarding an existing project or user setup. |
+
 ## Import (Claude to IR)
 
 | Claude | IR | notes |

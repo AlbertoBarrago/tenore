@@ -154,7 +154,7 @@
 <body>
   <main>
     <header>
-      <span class="eyebrow">Work in progress · v0.1</span>
+      <span class="eyebrow">Work in progress · v0.2</span>
       <h1>One source.<br><span>Every agent.</span></h1>
       <p class="lead">
         <code>tenore</code> compiles a single <code>.agents/</code> folder (Markdown + YAML)
@@ -162,6 +162,37 @@
         Switching agent becomes a 1:1 port.
       </p>
     </header>
+
+    <section>
+      <h2>Get started</h2>
+      <pre>npm install -g tenore-cli
+cd your-project
+tenore init            <span class="muted"># guided setup for this repository</span>
+tenore init --global   <span class="muted"># guided setup for your personal config</span></pre>
+      <p class="muted" style="margin-top:12px">
+        The wizard finds your existing agent config, imports what you pick into <code>.agents/</code>,
+        asks which agents to generate files for, previews the sync and runs it. Nothing is written until
+        you confirm, and it ends with the equivalent commands so you can script the same setup.
+      </p>
+      <pre>◇  Existing agent config found. Which ones should be imported into .agents/?
+│  Claude Code, Codex CLI
+◇  Which agents should tenore generate files for? (targets)
+│  Claude Code, Codex CLI
+◇  Add personal files to .gitignore?
+│  Yes
+◇  About to write
+│    import: Claude Code, Codex CLI
+│    targets: claude, codex
+◇  tenore sync would
+│    create     CLAUDE.md
+│    update     AGENTS.md
+◇  Equivalent commands
+│    tenore init --import claude
+│    tenore init --import codex
+│    tenore init --targets claude,codex
+│    tenore sync
+└  Done. Edit .agents/ and run `tenore sync` whenever it changes.</pre>
+    </section>
 
     <section>
       <h2>The problem</h2>
@@ -332,6 +363,10 @@ enabled = false</pre>
         <div class="card">
           <h3>No code in config</h3>
           <p>Executable frontmatter (<code>---js</code>) is refused: a cloned repo cannot run code through tenore.</p>
+        </div>
+        <div class="card">
+          <h3>Guided, never surprising</h3>
+          <p>The setup wizard writes nothing until you confirm, and shows the full diff before touching your personal config.</p>
         </div>
         <div class="card">
           <h3>CI ready</h3>

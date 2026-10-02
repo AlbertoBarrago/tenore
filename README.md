@@ -213,6 +213,8 @@ and Claude Code.
   more restrictive option is emitted with a warning (see [docs/mapping.md](docs/mapping.md)).
 - **Atomic writes** (temp file and rename), file modes preserved.
 - **Global config is opt-in:** `~/.claude/` is written only with `--global`.
+- **The wizard writes nothing until you confirm**, and for `--global` it shows the full diff
+  before touching `~/.claude`, `~/.codex` or `~/.gemini`. Cancelling leaves everything untouched.
 - **No code in frontmatter:** `---js` style frontmatter is refused.
 
 ## Targets
@@ -237,6 +239,7 @@ Every non-obvious mapping decision is a row in [docs/mapping.md](docs/mapping.md
 - [x] `tenore check` in CI (GitHub Action)
 - [x] `targets` in policy.md, `--prune` for orphaned files
 - [x] Memory MCP server (`tenore mcp`)
+- [x] Setup wizard: `tenore init` for a repository, `tenore init --global` for your personal config
 
 ## Development
 

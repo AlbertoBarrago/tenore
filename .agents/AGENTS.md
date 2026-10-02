@@ -18,10 +18,10 @@ npm test             # vitest run
 npx vitest run test/merge.test.ts      # single file
 npx vitest run -t "deny wins"          # single test by name
 npm run gen:schema   # regenerate schema/policy.schema.json from the zod schema
-node dist/cli.js <init|sync|check|diff>
+node dist/cli.js <init|sync|check|diff|mcp>
 ```
 
-Runtime target is Node >= 20 (`commander` pinned to v14 for that reason); dev tooling (vitest 5) needs Node >= 22.12. Imports use explicit `.ts` extensions (`rewriteRelativeImportExtensions`).
+Runtime target is Node >= 20.12 (`@clack/prompts`; `commander` pinned to v14); dev tooling (vitest 5) needs Node >= 22.12. Imports use explicit `.ts` extensions (`rewriteRelativeImportExtensions`).
 
 ## Architecture
 
@@ -30,6 +30,9 @@ Pipeline: `parse` (one `.agents/` layer per scope) -> `merge` (global -> repo ->
 - `src/ir/`: zod schema is the single definition of the IR and of `policy.md` frontmatter; the JSON Schema in `schema/` is generated from it, never hand-edited.
 - Merge rules: deny > ask > allow at any scope; lists concat + dedupe by canonical key; scalars and same-name MCP servers: narrower scope wins; instructions/memory keep scope order and their `source`.
 - `src/adapters/`: each adapter implements `detect/emit/import/lossy` plus `expresses` (what survives emit -> import, used by `init --import` to keep rules a target cannot express). `emit(ir, ctx)` receives the scope in `ctx` because Claude writes different files per scope. Target-specific mapping lives in `src/adapters/<id>/` (Claude rule strings, Codex `config.toml` keys and Starlark `prefix_rule`s).
+- `src/init.ts`: `scaffold`, `importInto` (the native files are authoritative for what the adapter `expresses`: used for drift recovery) and `updatePolicy` (validated rewrite of policy.md).
+- `src/wizard.ts`: interactive `tenore init` / `init --global`. Questions go through an injectable `Prompter` (clack, scripted in tests, defaults for `--yes`). Every answer is collected before anything is written. A multi-agent first import is a union (nothing dropped), unlike `init --import`. Ends by printing the equivalent commands.
+- `src/mcp/`: `tenore mcp`, a dependency-free MCP stdio server (JSON-RPC, requests handled sequentially) exposing memory tools confined to the `memory/` directories.
 - `src/sync/`: `.agents/.lock` (repo, committed), `.agents/local/.lock`, `~/.agents/.lock` hold path -> hash. On-disk hash != lock hash means a generated file was hand-edited: never overwrite, report drift.
 
 ## Invariants
@@ -41,4 +44,6 @@ Pipeline: `parse` (one `.agents/` layer per scope) -> `merge` (global -> repo ->
 - Codex: never emit `allow` prefix rules (they bypass the sandbox); `${env:VAR}` maps only to `env_vars`, never resolved.
 - Verify target syntax against official docs (and `codex execpolicy check`) before changing a mapping.
 - Global scope (`~/.claude/`) is written only with an explicit `--global` flag.
+- The wizard never writes before the user confirms; non-interactive runs (no TTY, or any of `--import`/`--targets`/`--force`) keep the plain scriptable behavior.
+- Antigravity permissions exist only in user settings: repo/local deny/ask are reported as NOT ENFORCED, never written elsewhere.
 - Every non-obvious mapping decision gets a row in `docs/mapping.md`.
